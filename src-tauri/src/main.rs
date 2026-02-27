@@ -1,10 +1,14 @@
-mod snirf; // TODO :  What does this do?
+mod state;
+mod domain;       // looks for domain/mod.rs
+mod io;           // looks for io/mod.rs
 
-use snirf::{parse_snirf, SnirfData}; // What does this do? Is it a include statement
+use crate::io::snirf_parser::parse_snirf;
 
 #[tauri::command]
-fn load_snirf(path: String) -> Result<SnirfData, String>{
-    parse_snirf(&path)
+fn load_snirf(path: String) -> Result<(), String> {
+    let snirf = parse_snirf(&path)?;
+    
+    Ok(())
 }
 
 fn main() {

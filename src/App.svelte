@@ -45,11 +45,11 @@
   {#if snirfData}
     <div class="info">
       <h2>File Loaded</h2>
-      <p>Channels: {snirfData.data.length}</p>
-      <p>Timepoints: {snirfData.time.length}</p>
-      <p>Sources: {snirfData.source_pos.length}</p>
-      <p>Detectors: {snirfData.detector_pos.length}</p>
-      <p>Duration: {(snirfData.time[snirfData.time.length - 1] - snirfData.time[0]).toFixed(2)}s</p>
+      <p>Channels: {snirfData.data.data.length}</p>
+      <p>Timepoints: {snirfData.data.time.length}</p>
+      <p>Sources: {snirfData.biosignal.auxilaries.length}</p>
+      <p>Detectors: {snirfData.biosignal.auxilaries.length}</p>
+      <p>Duration: {(snirfData.data.time[snirfData.data.time.length - 1] - snirfData.data.time[0]).toFixed(2)}s</p>
     </div>
   {/if}
 </main>
