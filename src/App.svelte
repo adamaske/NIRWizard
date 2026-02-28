@@ -3,32 +3,20 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import MenuBar from "./lib/components/menubar.svelte";
+  import InfoPanel from "./lib/components/infopanel.svelte";
   import Statusbar from "./lib/components/statusbar.svelte";
-  import ControlPanel from "./lib/components/controlpanel.svelte";
 
-  let filename = "No file loaded";
-  let channels = 0;
-  let samplingRate = 0;
-  let duration = 0;
-
-  function applySnirfSummary(summary) {
-    if (!summary) return;
-    filename = summary.filename;
-    channels = summary.channels;
-    samplingRate = summary.sampling_rate;
-    duration = summary.duration;
-  }
+  let summary = null;
 
   let unlisten;
 
   onMount(async () => {
-    // Populate statusbar if a default file was loaded at startup
-    const summary = await invoke("get_snirf_summary");
-    applySnirfSummary(summary);
+    // Populate if a default file was loaded at startup
+    summary = await invoke("get_snirf_summary");
 
-    // Keep statusbar in sync whenever a new file is loaded
+    // Keep in sync whenever a new file is loaded
     unlisten = await listen("snirf-loaded", (event) => {
-      applySnirfSummary(event.payload);
+      summary = event.payload;
     });
   });
 
@@ -39,8 +27,13 @@
 
 <div class="app">
   <MenuBar />
-  <ControlPanel />
-  <Statusbar {filename} {channels} {samplingRate} {duration} />
+  <InfoPanel {summary} />
+  <Statusbar
+    filename={summary?.filename ?? "No file loaded"}
+    channels={summary?.channels ?? 0}
+    samplingRate={summary?.sampling_rate ?? 0}
+    duration={summary?.duration ?? 0}
+  />
 </div>
 
 <style>

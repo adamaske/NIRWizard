@@ -1,4 +1,7 @@
 <script>
+    import { invoke } from "@tauri-apps/api/core";
+    import { open } from "@tauri-apps/plugin-dialog";
+
     let activeMenu = null;
 
     const menus = [
@@ -14,11 +17,21 @@
         activeMenu = activeMenu === menu ? null : menu;
     }
 
-    function handleItemClick(menuLabel, item) {
-        console.log(`Clicked: ${menuLabel} -> ${item}`);
+    async function handleItemClick(menuLabel, item) {
+        activeMenu = null;
 
-        activeMenu = null; // Close menu after click
-        // TODO : This is where we call invoke() for RUST commands
+        if (menuLabel === "File" && item === "Open") {
+            const path = await open({
+                multiple: false,
+                filters: [{ name: "SNIRF", extensions: ["snirf"] }],
+            });
+            if (path) {
+                await invoke("load_snirf", { path });
+            }
+            return;
+        }
+
+        console.log(`Clicked: ${menuLabel} -> ${item}`);
     }
 
     function closeMenus() {
