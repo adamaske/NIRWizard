@@ -6,6 +6,14 @@ pub struct AppState {
     pub session: RwLock<Session>,
 }
 
+impl Default for AppState {
+    fn default() -> Self {
+        AppState {
+            session: RwLock::new(Session { snirf: None }),
+        }
+    }
+}
+
 pub struct Session {
-    pub snirf: SNIRF,
+    pub snirf: Option<SNIRF>,
 }

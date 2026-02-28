@@ -7,7 +7,7 @@ pub fn parse_snirf(path: &str) -> Result<SNIRF, String> {
 
     let _fd = FileDescriptor {
         path: path.to_string(),
-        name: path.split('/').last().unwrap_or("unknown").to_string(),
+        name: std::path::Path::new(path).file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string(),
     };
 
     let _ts_data: TimeSeriesData = parse_timeseries_data(&_file)?;
