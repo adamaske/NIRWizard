@@ -25,4 +25,5 @@ tauri = { version = "2.10.0", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 
-hdf5 = { package = "hdf5-metno", version = "0.9" }
+hdf5 = { package = "hdf5-metno", version = "0.9"}
+ndarray = "0.15"

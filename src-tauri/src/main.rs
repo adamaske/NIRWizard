@@ -20,8 +20,8 @@ pub struct SnirfSummary {
 
 impl SnirfSummary {
     fn from_snirf(snirf: &SNIRF) -> Self {
-        let channels = snirf.timeseries.data.len();
-        let time = &snirf.timeseries.time;
+        let channels = snirf.channels.channels.len();
+        let time = &snirf.channels.time;
         let sampling_rate = if time.len() >= 2 {
             1.0 / (time[1] - time[0])
         } else {

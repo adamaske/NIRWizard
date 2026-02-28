@@ -4,6 +4,7 @@
   import { listen } from "@tauri-apps/api/event";
   import MenuBar from "./lib/components/menubar.svelte";
   import Statusbar from "./lib/components/statusbar.svelte";
+  import ControlPanel from "./lib/components/controlpanel.svelte";
 
   let filename = "No file loaded";
   let channels = 0;
@@ -38,21 +39,27 @@
 
 <div class="app">
   <MenuBar />
-
+  <ControlPanel />
   <Statusbar {filename} {channels} {samplingRate} {duration} />
 </div>
 
 <style>
-  :global(body) {
+  :global(html),
+  :global(body),
+  :global(#app) {
     margin: 0;
     padding: 0;
+    width: 100%;
+    height: 100%;
     font-family: "Segoe UI", system-ui, sans-serif;
-    overflow: hidden;
   }
 
   .app {
     width: 100%;
-    height: 100vh;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     background: #0f0f1a;
     color: #d0d0e0;
   }

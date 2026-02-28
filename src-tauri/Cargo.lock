@@ -81,6 +81,7 @@ version = "0.1.0"
 dependencies = [
  "hdf5-metno",
  "log",
+ "ndarray",
  "serde",
  "serde_json",
  "tauri",
