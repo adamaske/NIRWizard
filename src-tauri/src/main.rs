@@ -29,6 +29,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::load_snirf,
             commands::get_snirf_summary,
+            commands::timeseries::get_timeseries_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

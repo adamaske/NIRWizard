@@ -26,7 +26,12 @@
                 filters: [{ name: "SNIRF", extensions: ["snirf"] }],
             });
             if (path) {
-                await invoke("load_snirf", { path });
+                try {
+                    await invoke("load_snirf", { path });
+                } catch (err) {
+                    console.error("Failed to load SNIRF:", err);
+                    alert(`Failed to load file:\n\n${err}`);
+                }
             }
             return;
         }

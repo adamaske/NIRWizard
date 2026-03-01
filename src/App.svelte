@@ -4,17 +4,14 @@
   import { listen } from "@tauri-apps/api/event";
   import MenuBar from "./lib/components/menubar.svelte";
   import InfoPanel from "./lib/components/infopanel.svelte";
+  import DataPlotter from "./lib/components/DataPlotter.svelte";
   import Statusbar from "./lib/components/statusbar.svelte";
 
   let summary = null;
-
   let unlisten;
 
   onMount(async () => {
-    // Populate if a default file was loaded at startup
     summary = await invoke("get_snirf_summary");
-
-    // Keep in sync whenever a new file is loaded
     unlisten = await listen("snirf-loaded", (event) => {
       summary = event.payload;
     });
@@ -27,7 +24,24 @@
 
 <div class="app">
   <MenuBar />
-  <InfoPanel {summary} />
+
+  <div class="workspace">
+    <!--
+      This is the flexible area. To change layout, just rearrange these divs.
+      
+      Side by side:  workspace is flex-direction: row (default)
+      Stacked:       workspace is flex-direction: column
+      
+      Each panel wrapper gets a flex value controlling its share of space.
+    -->
+    <div class="panel" style="flex: 1;">
+      <InfoPanel {summary} />
+    </div>
+    <div class="panel" style="flex: 2;">
+      <DataPlotter />
+    </div>
+  </div>
+
   <Statusbar
     filename={summary?.filename ?? "No file loaded"}
     channels={summary?.channels ?? 0}
@@ -55,5 +69,19 @@
     overflow: hidden;
     background: #0f0f1a;
     color: #d0d0e0;
+  }
+
+  .workspace {
+    flex: 1;
+    display: flex;
+    flex-direction: row; /* side by side */
+    min-height: 0; /* critical: lets flex children shrink */
+    overflow: hidden;
+  }
+
+  .panel {
+    min-width: 0; /* prevents content from forcing panel wider */
+    min-height: 0;
+    overflow: hidden;
   }
 </style>

@@ -162,12 +162,13 @@ pub struct Events {
 // =========================
 #[derive(Serialize, Debug)]
 pub struct BiosignalData {
-    pub time: Vec<f64>,                 // Time vector
-    pub auxilaries: Vec<AuxiliaryData>, // List of auxiliary signals (e.g., accelerometer, heart rate)
+    pub auxilaries: Vec<AuxiliaryData>,
 }
 
 #[derive(Serialize, Debug)]
 pub struct AuxiliaryData {
     pub name: String,
+    pub unit: String,
     pub data: Vec<f64>,
+    pub time: Vec<f64>,
 }
