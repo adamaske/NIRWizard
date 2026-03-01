@@ -1,43 +1,98 @@
-# Svelte + Vite
+# NIRWizard
 
-This template should help get you started developing with Svelte in Vite.
+A desktop application for loading and analyzing fNIRS (functional Near-Infrared Spectroscopy) data in the SNIRF file format.
 
-## Recommended IDE Setup
+Built with **Tauri 2**, **Svelte 5**, and **Rust**.
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode).
+---
 
-## Need an official Svelte framework?
+## What is fNIRS?
 
-Check out [SvelteKit](https://github.com/sveltejs/kit#readme), which is also powered by Vite. Deploy anywhere with its serverless-first approach and adapt to various platforms, with out of the box support for TypeScript, SCSS, and Less, and easily-added support for mdsvex, GraphQL, PostCSS, Tailwind CSS, and more.
+Functional Near-Infrared Spectroscopy (fNIRS) is a non-invasive neuroimaging technique that measures brain activity by shining near-infrared light into the scalp and detecting how much is absorbed. Oxygenated hemoglobin (HbO) and deoxygenated hemoglobin (HbR) absorb light differently at distinct wavelengths (typically ~690 nm for HbR and ~830 nm for HbO), allowing their concentrations to be tracked over time.
 
-## Technical considerations
+A typical fNIRS setup consists of **sources** (light emitters) and **detectors** placed on the scalp. Each source-detector pair forms a **channel** that samples the cortical region between them.
 
-**Why use this over SvelteKit?**
+---
 
-- It brings its own routing solution which might not be preferable for some users.
-- It is first and foremost a framework that just happens to use Vite under the hood, not a Vite app.
+## The SNIRF Format
 
-This template contains as little as possible to get started with Vite + Svelte, while taking into account the developer experience with regards to HMR and intellisense. It demonstrates capabilities on par with the other `create-vite` templates and is a good starting point for beginners dipping their toes into a Vite + Svelte project.
+SNIRF (Shared Near Infrared Spectroscopy Format) is the community-standard file format for fNIRS data. SNIRF files are HDF5 containers with a defined internal structure:
 
-Should you later need the extended capabilities and extensibility provided by SvelteKit, the template has been structured similarly to SvelteKit so that it is easy to migrate.
-
-**Why include `.vscode/extensions.json`?**
-
-Other templates indirectly recommend extensions via the README, but this file allows VS Code to prompt the user to install the recommended extension upon opening the project.
-
-**Why enable `checkJs` in the JS template?**
-
-It is likely that most cases of changing variable types in runtime are likely to be accidental, rather than deliberate. This provides advanced typechecking out of the box. Should you like to take advantage of the dynamically-typed nature of JavaScript, it is trivial to change the configuration.
-
-**Why is HMR not preserving my local component state?**
-
-HMR state preservation comes with a number of gotchas! It has been disabled by default in both `svelte-hmr` and `@sveltejs/vite-plugin-svelte` due to its often surprising behavior. You can read the details [here](https://github.com/sveltejs/svelte-hmr/tree/master/packages/svelte-hmr#preservation-of-local-state).
-
-If you have state that's important to retain within a component, consider creating an external store which would not be replaced by HMR.
-
-```js
-// store.js
-// An extremely simple external store
-import { writable } from 'svelte/store'
-export default writable(0)
 ```
+/nirs/
+  metaDataTags/          # Key-value metadata (subject ID, date, etc.)
+  probe/
+    wavelengths          # e.g. [690, 830]
+    sourcePos2D / sourcePos3D
+    detectorPos2D / detectorPos3D
+  data1/
+    dataTimeSeries       # [timepoints x channels] raw optical density matrix
+    time                 # time vector (seconds)
+    measurementList1/    # one group per column in dataTimeSeries
+      sourceIndex
+      detectorIndex
+      wavelengthIndex
+    measurementList2/
+    ...
+  stim1/                 # event/stimulus blocks (optional)
+    name
+    data                 # [markers x 3] -- onset, duration, value
+  aux1/                  # auxiliary signals, e.g. accelerometer (optional)
+    ...
+```
+
+---
+
+## Parsing
+
+NIRWizard parses SNIRF files in Rust using the `hdf5-metno` crate. The parsed data is mapped to the following domain model:
+
+```
+SNIRF
++-- FileDescriptor       -- file path and name
++-- Metadata             -- metaDataTags key-value pairs
++-- Wavelengths          -- HbO and HbR wavelengths (nm)
++-- Probe
+|   +-- sources[]        -- source optodes with 2D/3D positions
+|   +-- detectors[]      -- detector optodes with 2D/3D positions
++-- ChannelData
+|   +-- time[]           -- shared time vector
+|   +-- channels[]
+|       +-- name         -- e.g. "S1-D2"
+|       +-- source_id / detector_id
+|       +-- hbo[]        -- HbO time series for this channel
+|       +-- hbr[]        -- HbR time series for this channel
++-- Events
+|   +-- events[]
+|       +-- name         -- stimulus condition label
+|       +-- markers[]    -- onset, duration, value per marker
++-- BiosignalData        -- auxiliary signals (accelerometer, etc.)
+```
+
+The `dataTimeSeries` matrix contains interleaved columns for each wavelength. NIRWizard reads the `measurementList` entries to identify which columns correspond to HbO vs HbR for each source-detector pair, then splits and assigns them into typed `Channel` structs.
+
+---
+
+## Tech Stack
+
+| Layer     | Technology                  |
+|-----------|-----------------------------|
+| Frontend  | Svelte 5, Vite 7            |
+| Desktop   | Tauri 2                     |
+| Backend   | Rust (edition 2021)         |
+| Data I/O  | HDF5 via `hdf5-metno` crate |
+| Numerics  | `ndarray` 0.15              |
+
+---
+
+## Running
+
+```bash
+# Development
+npx tauri dev
+
+# Production build
+npx tauri build
+```
+
+Set `NIRWIZARD_DEFAULT_SNIRF=/path/to/file.snirf` to auto-load a file on startup during development.
