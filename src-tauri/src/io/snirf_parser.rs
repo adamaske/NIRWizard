@@ -63,7 +63,7 @@ fn walk_hdf5(group: &hdf5::Group, depth: usize) {
             let shape = ds.shape();
             let ty = dtype_label(&ds);
             let preview = scalar_preview(&ds);
-            println!("{}  [D] {}  {:?} <{}>{}",  indent, name, shape, ty, preview);
+            println!("{}  [D] {}  {:?} <{}>{}", indent, name, shape, ty, preview);
         } else if let Ok(sub) = group.group(name) {
             println!("{}  [G] {}/", indent, name);
             walk_hdf5(&sub, depth + 1);
@@ -96,11 +96,19 @@ fn read_string(ds: &hdf5::Dataset) -> Result<String, String> {
         return Ok(s.to_string());
     }
     // [1] VarLenAscii (SATORI style)
-    if let Some(s) = ds.read_raw::<hdf5::types::VarLenAscii>().ok().and_then(|v| v.into_iter().next()) {
+    if let Some(s) = ds
+        .read_raw::<hdf5::types::VarLenAscii>()
+        .ok()
+        .and_then(|v| v.into_iter().next())
+    {
         return Ok(s.to_string());
     }
     // [1] VarLenUnicode
-    if let Some(s) = ds.read_raw::<hdf5::types::VarLenUnicode>().ok().and_then(|v| v.into_iter().next()) {
+    if let Some(s) = ds
+        .read_raw::<hdf5::types::VarLenUnicode>()
+        .ok()
+        .and_then(|v| v.into_iter().next())
+    {
         return Ok(s.to_string());
     }
     Err("no readable string encoding found".to_string())
@@ -121,8 +129,8 @@ fn read_i32(ds: &hdf5::Dataset) -> Result<i32, String> {
 pub fn parse_snirf(path: &str) -> Result<SNIRF, String> {
     let _file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
 
-    #[cfg(debug_assertions)]
-    print_hdf5_tree(path, &_file);
+    //#[cfg(debug_assertions)]
+    //print_hdf5_tree(path, &_file);
 
     let _fd = FileDescriptor {
         path: path.to_string(),
@@ -201,12 +209,16 @@ pub fn parse_biosignals(file: &File) -> Result<BiosignalData, String> {
         let name = aux
             .dataset("name")
             .map_err(|e| format!("aux{}: failed to read name: {}", i, e))
-            .and_then(|ds| read_string(&ds).map_err(|e| format!("aux{}: failed to parse name: {}", i, e)))?;
+            .and_then(|ds| {
+                read_string(&ds).map_err(|e| format!("aux{}: failed to parse name: {}", i, e))
+            })?;
 
         let unit = aux
             .dataset("dataUnit")
             .map_err(|e| format!("aux{}: failed to read dataUnit: {}", i, e))
-            .and_then(|ds| read_string(&ds).map_err(|e| format!("aux{}: failed to parse dataUnit: {}", i, e)))?;
+            .and_then(|ds| {
+                read_string(&ds).map_err(|e| format!("aux{}: failed to parse dataUnit: {}", i, e))
+            })?;
 
         let data: Vec<f64> = aux
             .dataset("dataTimeSeries")
@@ -346,15 +358,21 @@ pub fn parse_measurement_list(file: &File) -> Result<ChannelData, String> {
                 .group(&format!("measurementList{}", i + 1))
                 .map_err(|e| format!("measurementList{}: failed to open: {}", i + 1, e))?;
 
-            let source_id = ml.dataset("sourceIndex")
+            let source_id = ml
+                .dataset("sourceIndex")
                 .map_err(|e| format!("measurementList{}: sourceIndex: {}", i + 1, e))
-                .and_then(|ds| read_i32(&ds).map_err(|e| format!("measurementList{}: sourceIndex: {}", i + 1, e)))?
-                as usize;
+                .and_then(|ds| {
+                    read_i32(&ds)
+                        .map_err(|e| format!("measurementList{}: sourceIndex: {}", i + 1, e))
+                })? as usize;
 
-            let detector_id = ml.dataset("detectorIndex")
+            let detector_id = ml
+                .dataset("detectorIndex")
                 .map_err(|e| format!("measurementList{}: detectorIndex: {}", i + 1, e))
-                .and_then(|ds| read_i32(&ds).map_err(|e| format!("measurementList{}: detectorIndex: {}", i + 1, e)))?
-                as usize;
+                .and_then(|ds| {
+                    read_i32(&ds)
+                        .map_err(|e| format!("measurementList{}: detectorIndex: {}", i + 1, e))
+                })? as usize;
 
             Ok(Channel {
                 id: i,
@@ -390,7 +408,9 @@ pub fn parse_events(file: &File) -> Result<Events, String> {
         let name = stim
             .dataset("name")
             .map_err(|e| format!("stim{}: failed to read name: {}", i, e))
-            .and_then(|ds| read_string(&ds).map_err(|e| format!("stim{}: failed to parse name: {}", i, e)))?;
+            .and_then(|ds| {
+                read_string(&ds).map_err(|e| format!("stim{}: failed to parse name: {}", i, e))
+            })?;
 
         let data: Array2<f64> = stim
             .dataset("data")
