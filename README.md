@@ -1,5 +1,9 @@
 # NIRWizard
 
+<p align="center">
+  <img src="NIRWizard_1024.png" alt="NIRWizard" width="200"/>
+</p>
+
 A desktop application for loading and analyzing fNIRS (functional Near-Infrared Spectroscopy) data in the SNIRF file format.
 
 Built with **Tauri 2**, **Svelte 5**, and **Rust**.
