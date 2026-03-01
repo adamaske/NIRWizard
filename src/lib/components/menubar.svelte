@@ -89,8 +89,8 @@
         display: flex;
         align-items: center;
         height: 32px;
-        background: #1a1a2e;
-        border-bottom: 1px solid #2a2a3e;
+        background: var(--bg-raised);
+        border-bottom: 1px solid var(--border-default);
         padding: 0 8px;
         gap: 2px;
         user-select: none;
@@ -99,7 +99,7 @@
     .app-title {
         font-weight: 600;
         font-size: 13px;
-        color: #8888cc;
+        color: var(--accent-green);
         margin-right: 12px;
         letter-spacing: 0.5px;
     }
@@ -111,7 +111,7 @@
     .menu-trigger {
         background: none;
         border: none;
-        color: #b0b0c8;
+        color: var(--text-secondary);
         font-size: 13px;
         padding: 4px 10px;
         border-radius: 4px;
@@ -120,14 +120,14 @@
 
     .menu-trigger:hover,
     .menu-trigger.active {
-        background: #2a2a4a;
-        color: #e0e0f0;
+        background: var(--bg-overlay);
+        color: var(--text-primary);
     }
 
     .menu-button {
         background: none;
         border: none;
-        color: #b0b0c8;
+        color: var(--text-secondary);
         font-size: 13px;
         padding: 4px 10px;
         border-radius: 4px;
@@ -136,21 +136,21 @@
 
     .menu-button:hover,
     .menu-button.active {
-        background: #2a2a4a;
-        color: #e0e0f0;
+        background: var(--bg-overlay);
+        color: var(--text-primary);
     }
 
     .dropdown {
         position: absolute;
         top: 100%;
         left: 0;
-        background: #1e1e34;
-        border: 1px solid #3a3a5e;
+        background: var(--bg-raised);
+        border: 1px solid var(--border-strong);
         border-radius: 6px;
         padding: 4px 0;
         min-width: 200px;
         z-index: 100;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 8px 24px var(--shadow-dropdown);
     }
 
     .dropdown-item {
@@ -158,7 +158,7 @@
         width: 100%;
         background: none;
         border: none;
-        color: #c0c0d8;
+        color: var(--text-secondary);
         font-size: 13px;
         padding: 6px 16px;
         text-align: left;
@@ -166,7 +166,7 @@
     }
 
     .dropdown-item:hover {
-        background: #2a2a4e;
-        color: #ffffff;
+        background: var(--bg-overlay);
+        color: var(--text-primary);
     }
 </style>

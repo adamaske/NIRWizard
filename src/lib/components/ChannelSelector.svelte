@@ -8,10 +8,11 @@
   const CH_LINE_W = 12; // channel line stroke width
   const CH_HIT_W = 16; // invisible hit-area stroke width for click detection
 
-  const C_SOURCE = "#dd3333";
-  const C_DETECTOR = "#3355dd";
-  const C_CHANNEL = "#6e6e8a";
-  const C_SELECTED = "#ffdd00";
+  // Mirror CSS vars — SVG inline attrs can't use CSS custom properties
+  const C_SOURCE = "#dd3333";   // --color-source
+  const C_DETECTOR = "#3355dd"; // --color-detector
+  const C_CHANNEL = "#6e6e8a";  // --color-channel
+  const C_SELECTED = "#ffdd00"; // --color-selected
 
   // ── State ─────────────────────────────────────────────────────────────────
   /** @type {{ sources: any[], detectors: any[], channels: any[] } | null} */
@@ -337,7 +338,7 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    background: #0d0d18;
+    background: var(--bg-base);
     overflow: hidden;
   }
 
@@ -347,8 +348,8 @@
     align-items: center;
     gap: 8px;
     padding: 6px 12px;
-    background: #13131f;
-    border-bottom: 1px solid #1c1c2e;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
     flex-shrink: 0;
   }
 
@@ -356,9 +357,9 @@
     padding: 4px 11px;
     font-size: 11px;
     font-family: inherit;
-    background: #1a1a2e;
-    color: #9090c0;
-    border: 1px solid #2a2a48;
+    background: var(--bg-raised);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-default);
     border-radius: 4px;
     cursor: pointer;
     transition:
@@ -369,13 +370,13 @@
   }
 
   .tb-btn:hover:not(:disabled) {
-    background: #242448;
-    color: #d0d0f4;
-    border-color: #5050a0;
+    background: var(--bg-overlay);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
   }
 
   .tb-btn:active:not(:disabled) {
-    background: #2e2e58;
+    background: var(--bg-overlay);
   }
 
   .tb-btn:disabled {
@@ -385,7 +386,7 @@
 
   .ch-count {
     font-size: 11px;
-    color: #6a6a98;
+    color: var(--text-muted);
     font-variant-numeric: tabular-nums;
     margin-left: 2px;
   }
@@ -393,7 +394,7 @@
   .hint {
     margin-left: auto;
     font-size: 10px;
-    color: #2e2e44;
+    color: var(--text-faint);
     user-select: none;
     white-space: nowrap;
   }

@@ -9,11 +9,15 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         AppState {
-            session: RwLock::new(Session { snirf: None }),
+            session: RwLock::new(Session {
+                snirf: None,
+                selected_channels: Vec::new(),
+            }),
         }
     }
 }
 
 pub struct Session {
     pub snirf: Option<SNIRF>,
+    pub selected_channels: Vec<usize>,
 }

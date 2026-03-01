@@ -1,5 +1,5 @@
 use serde::Serialize;
-use tauri::State;
+use tauri::{Emitter, State};
 
 use crate::state::AppState;
 
@@ -96,23 +96,41 @@ pub fn get_probe_layout(state: State<AppState>) -> Option<ProbeLayout> {
     })
 }
 
-/// Called by ChannelSelector whenever the selection changes.  Prints the
-/// current selection so we can observe it during development; later this will
-/// feed the DataPlotter.
-#[tauri::command]
-pub fn set_selected_channels(channel_ids: Vec<usize>, state: State<AppState>) {
-    let total = state
-        .session
-        .read()
-        .ok()
-        .and_then(|s| s.snirf.as_ref().map(|snirf| snirf.channels.channels.len()))
-        .unwrap_or(0);
+#[derive(Serialize, Clone)]
+pub struct ChannelsSelectedPayload {
+    pub channel_ids: Vec<usize>,
+}
 
+/// Called by ChannelSelector whenever the selection changes.
+/// Stores the selection in session state and emits a `channels-selected` event.
+#[tauri::command]
+pub fn set_selected_channels(
+    channel_ids: Vec<usize>,
+    state: State<AppState>,
+    app: tauri::AppHandle,
+) {
     #[cfg(debug_assertions)]
-    println!(
-        "[ChannelSelector] {}/{} selected: {:?}",
-        channel_ids.len(),
-        total,
-        channel_ids
+    {
+        let total = state
+            .session
+            .read()
+            .ok()
+            .and_then(|s| s.snirf.as_ref().map(|snirf| snirf.channels.channels.len()))
+            .unwrap_or(0);
+        println!(
+            "[ChannelSelector] {}/{} selected: {:?}",
+            channel_ids.len(),
+            total,
+            channel_ids
+        );
+    }
+
+    if let Ok(mut session) = state.session.write() {
+        session.selected_channels = channel_ids.clone();
+    }
+
+    let _ = app.emit(
+        "channels-selected",
+        ChannelsSelectedPayload { channel_ids },
     );
 }

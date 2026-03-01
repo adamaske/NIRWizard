@@ -22,8 +22,10 @@
   // Drag state
   let draggingRow = false; // top / bottom divider
   let draggingCol = false; // left / right divider
-  let dragStartY = 0, dragStartTop = 0;
-  let dragStartX = 0, dragStartLeft = 0;
+  let dragStartY = 0,
+    dragStartTop = 0;
+  let dragStartX = 0,
+    dragStartLeft = 0;
 
   onMount(async () => {
     summary = await invoke("get_snirf_summary");
@@ -33,7 +35,7 @@
 
     // Seed pixel sizes from actual DOM dimensions so layout is stable on load
     topHeight = Math.round(workspaceEl.clientHeight * 0.6);
-    leftWidth  = Math.round(bottomRowEl.clientWidth  * 0.6);
+    leftWidth = Math.round(bottomRowEl.clientWidth * 0.6);
   });
 
   onDestroy(() => {
@@ -44,19 +46,19 @@
   function startRowDrag(e) {
     e.preventDefault();
     draggingRow = true;
-    dragStartY   = e.clientY;
+    dragStartY = e.clientY;
     dragStartTop = topHeight;
-    document.body.style.cursor     = "ns-resize";
+    document.body.style.cursor = "ns-resize";
     document.body.style.userSelect = "none";
   }
 
   // ── Column divider (left ↔ right) ─────────────────────────────────────────
   function startColDrag(e) {
     e.preventDefault();
-    draggingCol  = true;
-    dragStartX    = e.clientX;
+    draggingCol = true;
+    dragStartX = e.clientX;
     dragStartLeft = leftWidth;
-    document.body.style.cursor     = "ew-resize";
+    document.body.style.cursor = "ew-resize";
     document.body.style.userSelect = "none";
   }
 
@@ -64,17 +66,23 @@
   function onMouseMove(e) {
     if (draggingRow) {
       const maxH = workspaceEl.clientHeight - 80;
-      topHeight = Math.max(80, Math.min(maxH, dragStartTop + (e.clientY - dragStartY)));
+      topHeight = Math.max(
+        80,
+        Math.min(maxH, dragStartTop + (e.clientY - dragStartY)),
+      );
     }
     if (draggingCol) {
       const maxW = bottomRowEl.clientWidth - 120;
-      leftWidth = Math.max(120, Math.min(maxW, dragStartLeft + (e.clientX - dragStartX)));
+      leftWidth = Math.max(
+        120,
+        Math.min(maxW, dragStartLeft + (e.clientX - dragStartX)),
+      );
     }
   }
 
   function onMouseUp() {
     if (draggingRow || draggingCol) {
-      document.body.style.cursor     = "";
+      document.body.style.cursor = "";
       document.body.style.userSelect = "";
       draggingRow = false;
       draggingCol = false;
@@ -89,7 +97,6 @@
   <MenuBar />
 
   <div class="workspace" bind:this={workspaceEl}>
-
     <!-- ── Top panel: DataPlotter ── -->
     <div
       class="panel"
@@ -108,11 +115,12 @@
 
     <!-- ── Bottom strip ── -->
     <div class="bottom-row" bind:this={bottomRowEl}>
-
       <!-- Left: ChannelSelector -->
       <div
         class="panel"
-        style={leftWidth !== null ? `width:${leftWidth}px; flex:none` : "flex:1.5"}
+        style={leftWidth !== null
+          ? `width:${leftWidth}px; flex:none`
+          : "flex:1.5"}
       >
         <ChannelSelector />
       </div>
@@ -129,7 +137,6 @@
       <div class="panel" style="flex:1">
         <InfoPanel {summary} />
       </div>
-
     </div>
   </div>
 
@@ -158,8 +165,8 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: #0f0f1a;
-    color: #d0d0e0;
+    background: var(--bg-base);
+    color: var(--text-primary);
   }
 
   /* ── Main workspace: stacks plotter on top, bottom strip below ── */
@@ -173,7 +180,7 @@
 
   /* ── Bottom strip: channel selector left, info panel right ── */
   .bottom-row {
-    flex: 1;      /* fills remaining height after DataPlotter */
+    flex: 1; /* fills remaining height after DataPlotter */
     display: flex;
     flex-direction: row;
     min-height: 0;
@@ -192,7 +199,7 @@
   /* ── Dividers ── */
   .divider {
     flex-shrink: 0;
-    background: #1a1a2c;
+    background: var(--border-subtle);
     transition: background 0.15s;
     position: relative;
   }
@@ -226,6 +233,6 @@
 
   .divider:hover,
   .divider.dragging {
-    background: #4040a0;
+    background: var(--accent-green);
   }
 </style>

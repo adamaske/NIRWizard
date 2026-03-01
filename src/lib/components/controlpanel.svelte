@@ -24,16 +24,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #0f0f1a;
+    background: var(--bg-base);
   }
 
   .load-btn {
     padding: 12px 32px;
     font-size: 15px;
     font-family: inherit;
-    background: #1e1e3a;
-    color: #a0a0cc;
-    border: 1px solid #3a3a5e;
+    background: var(--bg-raised);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
     border-radius: 6px;
     cursor: pointer;
     letter-spacing: 0.4px;
@@ -41,12 +41,12 @@
   }
 
   .load-btn:hover {
-    background: #2a2a4e;
-    color: #e0e0f8;
-    border-color: #6060aa;
+    background: var(--bg-overlay);
+    color: var(--text-primary);
+    border-color: var(--accent-green);
   }
 
   .load-btn:active {
-    background: #333360;
+    background: var(--bg-overlay);
   }
 </style>

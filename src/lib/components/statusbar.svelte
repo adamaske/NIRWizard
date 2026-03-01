@@ -53,11 +53,11 @@
     display: flex;
     align-items: center;
     height: 24px;
-    background: #1a1a2e;
-    border-top: 1px solid #2a2a3e;
+    background: var(--bg-raised);
+    border-top: 1px solid var(--border-default);
     padding: 0 12px;
     font-size: 12px;
-    color: #8888a8;
+    color: var(--text-secondary);
     flex-shrink: 0;
     gap: 8px;
   }
@@ -69,7 +69,7 @@
   }
 
   .status-label {
-    color: #666688;
+    color: var(--text-muted);
   }
 
   .status-icon {
@@ -79,7 +79,7 @@
   .status-divider {
     width: 1px;
     height: 12px;
-    background: #2a2a3e;
+    background: var(--border-default);
   }
 
   .spacer {
@@ -90,6 +90,6 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #44cc66;
+    background: var(--color-ok);
   }
 </style>

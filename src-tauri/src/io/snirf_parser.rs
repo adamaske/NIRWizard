@@ -265,16 +265,16 @@ pub fn parse_probe(file: &File) -> Result<Probe, String> {
     let n_detectors = d3d_array.nrows();
     let n_sources = s3d_array.nrows();
 
-    // 2D positions are optional — fall back to zeros if absent
+    // 2D positions are optional — fall back to x,y from 3D positions if absent
     let d2d_array: Array2<f64> = probe
         .dataset("detectorPos2D")
         .and_then(|ds| ds.read_2d())
-        .unwrap_or_else(|_| Array2::zeros((n_detectors, 2)));
+        .unwrap_or_else(|_| d3d_array.slice(ndarray::s![.., 0..2]).to_owned());
 
     let s2d_array: Array2<f64> = probe
         .dataset("sourcePos2D")
         .and_then(|ds| ds.read_2d())
-        .unwrap_or_else(|_| Array2::zeros((n_sources, 2)));
+        .unwrap_or_else(|_| s3d_array.slice(ndarray::s![.., 0..2]).to_owned());
 
     let row_to_vec2 = |arr: &Array2<f64>, i: usize| Vec2 {
         x: arr[[i, 0]],
