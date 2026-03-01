@@ -30,6 +30,8 @@ fn main() {
             commands::load_snirf,
             commands::get_snirf_summary,
             commands::timeseries::get_timeseries_data,
+            commands::probe::get_probe_layout,
+            commands::probe::set_selected_channels,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

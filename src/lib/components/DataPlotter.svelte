@@ -140,8 +140,8 @@
 
 <style>
   .plotter {
-    width: 100%;
-    height: 100%;
-    min-height: 200px;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
   }
 </style>
