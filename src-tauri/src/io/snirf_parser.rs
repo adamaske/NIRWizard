@@ -187,24 +187,64 @@ pub fn parse_measurement_list(file: &File) -> Result<ChannelData, String> {
 
             let source_id = ml
                 .dataset("sourceIndex")
-                .map_err(|e| format!("measurementList{}: failed to read sourceIndex: {}", i + 1, e))?
+                .map_err(|e| {
+                    format!(
+                        "measurementList{}: failed to read sourceIndex: {}",
+                        i + 1,
+                        e
+                    )
+                })?
                 .read_scalar::<i32>()
-                .map_err(|e| format!("measurementList{}: failed to parse sourceIndex: {}", i + 1, e))? as usize;
+                .map_err(|e| {
+                    format!(
+                        "measurementList{}: failed to parse sourceIndex: {}",
+                        i + 1,
+                        e
+                    )
+                })? as usize;
 
             let detector_id = ml
                 .dataset("detectorIndex")
-                .map_err(|e| format!("measurementList{}: failed to read detectorIndex: {}", i + 1, e))?
+                .map_err(|e| {
+                    format!(
+                        "measurementList{}: failed to read detectorIndex: {}",
+                        i + 1,
+                        e
+                    )
+                })?
                 .read_scalar::<i32>()
-                .map_err(|e| format!("measurementList{}: failed to parse detectorIndex: {}", i + 1, e))? as usize;
+                .map_err(|e| {
+                    format!(
+                        "measurementList{}: failed to parse detectorIndex: {}",
+                        i + 1,
+                        e
+                    )
+                })? as usize;
 
             let wl_idx = ml
                 .dataset("wavelengthIndex")
-                .map_err(|e| format!("measurementList{}: failed to read wavelengthIndex: {}", i + 1, e))?
+                .map_err(|e| {
+                    format!(
+                        "measurementList{}: failed to read wavelengthIndex: {}",
+                        i + 1,
+                        e
+                    )
+                })?
                 .read_scalar::<i32>()
-                .map_err(|e| format!("measurementList{}: failed to parse wavelengthIndex: {}", i + 1, e))? as usize;
+                .map_err(|e| {
+                    format!(
+                        "measurementList{}: failed to parse wavelengthIndex: {}",
+                        i + 1,
+                        e
+                    )
+                })? as usize;
 
             // wavelengthIndex 1 = wavelengths[0] = HbO (highest, sorted descending)
-            let (hbo_col, hbr_col) = if wl_idx == 1 { (i, i + half) } else { (i + half, i) };
+            let (hbo_col, hbr_col) = if wl_idx == 1 {
+                (i, i + half)
+            } else {
+                (i + half, i)
+            };
 
             Ok(Channel {
                 id: i,
@@ -217,7 +257,10 @@ pub fn parse_measurement_list(file: &File) -> Result<ChannelData, String> {
         })
         .collect::<Result<Vec<Channel>, String>>()?;
 
-    Ok(ChannelData { time: ts.time, channels })
+    Ok(ChannelData {
+        time: ts.time,
+        channels,
+    })
 }
 
 pub fn parse_events(file: &File) -> Result<Events, String> {
