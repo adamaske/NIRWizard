@@ -5,12 +5,13 @@
     let activeMenu = null;
 
     const menus = [
-        { name: "File", items: ["Open", "Save", "Exit"] },
-        { name: "Edit", items: ["Undo", "Redo", "Cut", "Copy", "Paste"] },
-        { name: "Preprocessing", items: ["Filter", "Baseline Correction", "Motion Correction"], },
-        { name: "Analysis", items: ["Run Analysis", "View Results"] },
-        { name: "View", items: ["Zoom In", "Zoom Out", "Reset Zoom"] },
-        { name: "Help", items: ["Documentation", "About"] },
+        { name: "File",             items: ["Open", "Save", "Exit"] },
+        { name: "Export",           items: ["Export SNIRF"] },
+        { name: "Edit",             items: ["Undo", "Redo", "Cut", "Copy", "Paste"] },
+        { name: "Preprocessing",    items: ["Filter", "Baseline Correction", "Motion Correction"], },
+        { name: "Analysis",         items: ["Run Analysis", "View Results"] },
+        { name: "View",             items: ["Zoom In", "Zoom Out", "Reset Zoom"] },
+        { name: "Help",             items: ["Documentation", "About"] },
     ];
 
     function toggleMenu(menu) {
