@@ -32,6 +32,10 @@ fn main() {
             commands::timeseries::get_timeseries_data,
             commands::probe::get_probe_layout,
             commands::probe::set_selected_channels,
+            commands::pipeline::add_pipeline_step,
+            commands::pipeline::remove_pipeline_step,
+            commands::pipeline::move_pipeline_step,
+            commands::pipeline::get_pipeline_summary,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

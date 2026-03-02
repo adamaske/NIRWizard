@@ -1,6 +1,7 @@
 mod summary;
-pub mod timeseries;
+pub mod pipeline;
 pub mod probe;
+pub mod timeseries;
 
 pub use summary::{EventSummary, SnirfSummary};
 pub use timeseries::get_timeseries_data;

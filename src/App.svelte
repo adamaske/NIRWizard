@@ -6,7 +6,10 @@
   import InfoPanel from "./lib/components/infopanel.svelte";
   import ChannelSelector from "./lib/components/ChannelSelector.svelte";
   import DataPlotter from "./lib/components/DataPlotter.svelte";
+  import PipelineEditor from "./lib/pipeline/PipelineEditor.svelte";
   import Statusbar from "./lib/components/statusbar.svelte";
+
+  let activeTab = "chart";
 
   let summary = null;
   let unlisten;
@@ -97,12 +100,28 @@
   <MenuBar />
 
   <div class="workspace" bind:this={workspaceEl}>
-    <!-- ── Top panel: DataPlotter ── -->
+    <!-- ── Top panel: tabbed (Chart / Pipeline) ── -->
     <div
       class="panel"
       style={topHeight !== null ? `height:${topHeight}px; flex:none` : "flex:2"}
     >
-      <DataPlotter />
+      <div class="tab-bar">
+        <button
+          class="tab-btn"
+          class:active={activeTab === "chart"}
+          on:click={() => (activeTab = "chart")}
+        >Chart</button>
+        <button
+          class="tab-btn"
+          class:active={activeTab === "pipeline"}
+          on:click={() => (activeTab = "pipeline")}
+        >Pipeline</button>
+      </div>
+      {#if activeTab === "chart"}
+        <DataPlotter />
+      {:else}
+        <PipelineEditor />
+      {/if}
     </div>
 
     <!-- ── Row divider ── -->
@@ -234,5 +253,37 @@
   .divider:hover,
   .divider.dragging {
     background: var(--accent-green);
+  }
+
+  /* ── Tab bar ── */
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+
+  .tab-btn {
+    padding: 6px 18px;
+    font-size: 11px;
+    font-family: inherit;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    background: none;
+    color: var(--text-muted);
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+  }
+
+  .tab-btn:hover {
+    color: var(--text-secondary);
+  }
+
+  .tab-btn.active {
+    color: var(--accent-green);
+    border-bottom-color: var(--accent-green);
   }
 </style>
