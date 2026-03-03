@@ -4,6 +4,7 @@ mod io;
 mod processing;
 mod state;
 
+use crate::domain::probe::OptodeLayout;
 use crate::io::snirf_parser::parse_snirf;
 use crate::state::AppState;
 use tauri::{Emitter, Manager};
@@ -17,9 +18,11 @@ fn main() {
             if let Ok(default_path) = std::env::var("NIRWIZARD_DEFAULT_SNIRF") {
                 if let Ok(snirf) = parse_snirf(&default_path) {
                     let summary = commands::SnirfSummary::from_snirf(&snirf);
+                    let optode_layout = OptodeLayout::from_snirf(&snirf);
                     let state = app.state::<AppState>();
                     if let Ok(mut session) = state.session.write() {
                         session.snirf = Some(snirf);
+                        session.optode_layout = Some(optode_layout);
                     }
                     let _ = app.emit("snirf-loaded", summary);
                 }
@@ -38,6 +41,11 @@ fn main() {
             commands::pipeline::remove_pipeline_step,
             commands::pipeline::move_pipeline_step,
             commands::pipeline::get_pipeline_summary,
+            commands::scene::load_cortex_obj,
+            commands::scene::load_scalp_obj,
+            commands::scene::get_cortex_geometry,
+            commands::scene::get_scalp_geometry,
+            commands::scene::get_optode_layout_3d,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

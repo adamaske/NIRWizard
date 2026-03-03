@@ -48,6 +48,27 @@
       return;
     }
 
+    if (
+      menuLabel === "Anatomy" &&
+      (item === "Open Cortex Anatomy (.obj)" ||
+        item === "Open Scalp Anatomy (.obj)")
+    ) {
+      const cmd = item.includes("Cortex") ? "load_cortex_obj" : "load_scalp_obj";
+      const path = await open({
+        multiple: false,
+        filters: [{ name: "OBJ Mesh", extensions: ["obj"] }],
+      });
+      if (path) {
+        try {
+          await invoke(cmd, { path });
+        } catch (err) {
+          console.error("Failed to load OBJ:", err);
+          alert(`Failed to load mesh:\n\n${err}`);
+        }
+      }
+      return;
+    }
+
     if (menuLabel == "Export" && item == "Export as .sNIRF") {
       const path = await save({
         filters: [{ name: "SNIRF", extensions: ["snirf"] }],

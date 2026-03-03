@@ -3,7 +3,10 @@
     "allow": [
       "WebSearch",
       "WebFetch(domain:docs.rs)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(head:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)"
     ]
   }
 }

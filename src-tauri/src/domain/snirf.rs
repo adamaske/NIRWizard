@@ -1,3 +1,4 @@
+use nalgebra::{Vector2, Vector3};
 use serde::Serialize;
 
 #[derive(Serialize, Debug)]
@@ -110,24 +111,11 @@ pub struct ChannelData {
 // =========================
 
 #[derive(Serialize, Debug)]
-pub struct Vec2 {
-    pub x: f64,
-    pub y: f64,
-}
-
-#[derive(Serialize, Debug)]
-pub struct Vec3 {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-}
-
-#[derive(Serialize, Debug)]
 pub struct Optode {
     pub name: String,
     pub id: usize,
-    pub pos_3d: Vec3,
-    pub pos_2d: Vec2,
+    pub pos_3d: Vector3<f64>,
+    pub pos_2d: Vector2<f64>,
 }
 
 // EXAMPLE But we need more robust abstraction and implemetnation

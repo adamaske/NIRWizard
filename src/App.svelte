@@ -7,9 +7,10 @@
   import ChannelSelector from "./lib/components/ChannelSelector.svelte";
   import DataPlotter from "./lib/components/DataPlotter.svelte";
   import PipelineEditor from "./lib/pipeline/PipelineEditor.svelte";
+  import Viewport3D from "./lib/components/Viewport3D.svelte";
   import Statusbar from "./lib/components/statusbar.svelte";
 
-  let activeTab = "chart";
+  let activeTab = "info";
 
   let summary = null;
   let unlisten;
@@ -23,12 +24,10 @@
   let leftWidth = null;
 
   // Drag state
-  let draggingRow = false; // top / bottom divider
-  let draggingCol = false; // left / right divider
-  let dragStartY = 0,
-    dragStartTop = 0;
-  let dragStartX = 0,
-    dragStartLeft = 0;
+  let draggingRow = false;
+  let draggingCol = false;
+  let dragStartY = 0, dragStartTop = 0;
+  let dragStartX = 0, dragStartLeft = 0;
 
   onMount(async () => {
     summary = await invoke("get_snirf_summary");
@@ -100,28 +99,12 @@
   <MenuBar />
 
   <div class="workspace" bind:this={workspaceEl}>
-    <!-- ── Top panel: tabbed (Chart / Pipeline) ── -->
+    <!-- ── Top panel: DataPlotter ── -->
     <div
       class="panel"
       style={topHeight !== null ? `height:${topHeight}px; flex:none` : "flex:2"}
     >
-      <div class="tab-bar">
-        <button
-          class="tab-btn"
-          class:active={activeTab === "chart"}
-          on:click={() => (activeTab = "chart")}
-        >Chart</button>
-        <button
-          class="tab-btn"
-          class:active={activeTab === "pipeline"}
-          on:click={() => (activeTab = "pipeline")}
-        >Pipeline</button>
-      </div>
-      {#if activeTab === "chart"}
-        <DataPlotter />
-      {:else}
-        <PipelineEditor />
-      {/if}
+      <DataPlotter />
     </div>
 
     <!-- ── Row divider ── -->
@@ -137,9 +120,7 @@
       <!-- Left: ChannelSelector -->
       <div
         class="panel"
-        style={leftWidth !== null
-          ? `width:${leftWidth}px; flex:none`
-          : "flex:1.5"}
+        style={leftWidth !== null ? `width:${leftWidth}px; flex:none` : "flex:1.5"}
       >
         <ChannelSelector />
       </div>
@@ -152,9 +133,32 @@
         on:mousedown={startColDrag}
       />
 
-      <!-- Right: InfoPanel -->
+      <!-- Right: tabbed Info / Pipeline -->
       <div class="panel" style="flex:1">
-        <InfoPanel {summary} />
+        <div class="tab-bar">
+          <button
+            class="tab-btn"
+            class:active={activeTab === "info"}
+            on:click={() => (activeTab = "info")}
+          >Info</button>
+          <button
+            class="tab-btn"
+            class:active={activeTab === "pipeline"}
+            on:click={() => (activeTab = "pipeline")}
+          >Pipeline</button>
+          <button
+            class="tab-btn"
+            class:active={activeTab === "3d"}
+            on:click={() => (activeTab = "3d")}
+          >3D View</button>
+        </div>
+        {#if activeTab === "info"}
+          <InfoPanel {summary} />
+        {:else if activeTab === "pipeline"}
+          <PipelineEditor />
+        {:else}
+          <Viewport3D />
+        {/if}
       </div>
     </div>
   </div>
@@ -197,9 +201,9 @@
     overflow: hidden;
   }
 
-  /* ── Bottom strip: channel selector left, info panel right ── */
+  /* ── Bottom strip: channel selector left, info/pipeline right ── */
   .bottom-row {
-    flex: 1; /* fills remaining height after DataPlotter */
+    flex: 1;
     display: flex;
     flex-direction: row;
     min-height: 0;
@@ -223,7 +227,6 @@
     position: relative;
   }
 
-  /* Widen the actual hit-target without changing visual thickness */
   .divider::after {
     content: "";
     position: absolute;

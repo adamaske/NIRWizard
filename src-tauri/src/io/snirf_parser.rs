@@ -1,4 +1,5 @@
 use crate::domain::*;
+use nalgebra::{Vector2, Vector3};
 use hdf5::File;
 use ndarray::Array2;
 
@@ -276,16 +277,9 @@ pub fn parse_probe(file: &File) -> Result<Probe, String> {
         .and_then(|ds| ds.read_2d())
         .unwrap_or_else(|_| s3d_array.slice(ndarray::s![.., 0..2]).to_owned());
 
-    let row_to_vec2 = |arr: &Array2<f64>, i: usize| Vec2 {
-        x: arr[[i, 0]],
-        y: arr[[i, 1]],
-    };
-
-    let row_to_vec3 = |arr: &Array2<f64>, i: usize| Vec3 {
-        x: arr[[i, 0]],
-        y: arr[[i, 1]],
-        z: arr[[i, 2]],
-    };
+    let row_to_vec2 = |arr: &Array2<f64>, i: usize| Vector2::new(arr[[i, 0]], arr[[i, 1]]);
+    let row_to_vec3 =
+        |arr: &Array2<f64>, i: usize| Vector3::new(arr[[i, 0]], arr[[i, 1]], arr[[i, 2]]);
 
     let _sources: Vec<Optode> = (0..n_sources)
         .map(|i| Optode {

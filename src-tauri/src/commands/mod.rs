@@ -1,4 +1,5 @@
 pub mod pipeline;
+pub mod scene;
 pub mod probe;
 mod summary;
 pub mod timeseries;
@@ -6,6 +7,7 @@ pub mod timeseries;
 pub use summary::SnirfSummary;
 use tauri::Emitter;
 
+use crate::domain::probe::OptodeLayout;
 use crate::io::snirf_exporter;
 use crate::io::snirf_parser::parse_snirf;
 use crate::state::AppState;
@@ -23,8 +25,13 @@ pub fn load_snirf(
 ) -> Result<SnirfSummary, String> {
     let snirf = parse_snirf(&path)?;
     let summary = SnirfSummary::from_snirf(&snirf);
+    let optode_layout = OptodeLayout::from_snirf(&snirf);
 
-    state.session.write().map_err(|e| e.to_string())?.snirf = Some(snirf);
+    {
+        let mut session = state.session.write().map_err(|e| e.to_string())?;
+        session.snirf = Some(snirf);
+        session.optode_layout = Some(optode_layout);
+    }
 
     app.emit("snirf-loaded", summary.clone())
         .map_err(|e| e.to_string())?;
