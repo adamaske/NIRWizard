@@ -28,8 +28,10 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::load_snirf,
+            commands::export_snirf,
             commands::get_snirf_summary,
             commands::timeseries::get_timeseries_data,
+            commands::timeseries::set_cursor_timepoint,
             commands::probe::get_probe_layout,
             commands::probe::set_selected_channels,
             commands::pipeline::add_pipeline_step,

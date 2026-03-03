@@ -1,13 +1,12 @@
-mod summary;
 pub mod pipeline;
 pub mod probe;
+mod summary;
 pub mod timeseries;
 
-pub use summary::{EventSummary, SnirfSummary};
-pub use timeseries::get_timeseries_data;
-
+pub use summary::SnirfSummary;
 use tauri::Emitter;
 
+use crate::io::snirf_exporter;
 use crate::io::snirf_parser::parse_snirf;
 use crate::state::AppState;
 
@@ -31,6 +30,18 @@ pub fn load_snirf(
         .map_err(|e| e.to_string())?;
 
     Ok(summary)
+}
+
+#[tauri::command]
+pub fn export_snirf(
+    path: String,
+    state: tauri::State<AppState>,
+    app: tauri::AppHandle,
+) -> Result<SnirfSummary, String> {
+    let session = state.session.read().map_err(|e| e.to_string())?;
+    let snirf = session.snirf.as_ref().ok_or("No SNIRF data to export")?;
+    snirf_exporter::export_snirf(snirf, &path)?;
+    Ok(SnirfSummary::from_snirf(snirf))
 }
 
 /// Returns the summary of whatever is currently loaded (`None` if nothing).
