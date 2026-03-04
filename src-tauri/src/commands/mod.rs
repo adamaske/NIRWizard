@@ -1,6 +1,6 @@
 pub mod pipeline;
-pub mod scene;
 pub mod probe;
+pub mod scene;
 mod summary;
 pub mod timeseries;
 
@@ -11,6 +11,7 @@ use crate::domain::probe::OptodeLayout;
 use crate::io::snirf_exporter;
 use crate::io::snirf_parser::parse_snirf;
 use crate::state::AppState;
+pub mod anatomy;
 
 // =============================================================================
 // Tauri commands

@@ -48,6 +48,22 @@
       return;
     }
 
+    if (menuLabel === "Anatomy" && item === "Open MRI (.nii.gz)") {
+      const path = await open({
+        multiple: false,
+        filters: [{ name: "NIfTI", extensions: ["gz", "nii"] }],
+      });
+      if (path) {
+        try {
+          await invoke("load_mri", { path });
+        } catch (err) {
+          console.error("Failed to load MRI:", err);
+          alert(`Failed to load MRI:\n\n${err}`);
+        }
+      }
+      return;
+    }
+
     if (
       menuLabel === "Anatomy" &&
       (item === "Open Cortex Anatomy (.obj)" ||

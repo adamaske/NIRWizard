@@ -25,7 +25,7 @@ pub struct MeshGeometry {
 
 pub struct MeshTopology {
     pub trimesh: Option<parry3d::shape::TriMesh>,
-    pub kdtree: kiddo::KdTree<f64, 3>,
+    pub kdtree: kiddo::float::kdtree::KdTree<f64, u64, 3, 512, u32>,
 }
 
 impl Clone for MeshTopology {
@@ -50,7 +50,7 @@ impl Default for MeshTopology {
     fn default() -> Self {
         Self {
             trimesh: None,
-            kdtree: kiddo::KdTree::new(),
+            kdtree: kiddo::float::kdtree::KdTree::new(),
         }
     }
 }
@@ -73,8 +73,8 @@ pub struct Mesh {
 // Helper: build KD-tree from vertex positions
 // =========================
 
-pub fn build_kdtree(vertices: &[Vector3<f64>]) -> kiddo::KdTree<f64, 3> {
-    let mut tree: kiddo::KdTree<f64, 3> = kiddo::KdTree::new();
+pub fn build_kdtree(vertices: &[Vector3<f64>]) -> kiddo::float::kdtree::KdTree<f64, u64, 3, 512, u32> {
+    let mut tree: kiddo::float::kdtree::KdTree<f64, u64, 3, 512, u32> = kiddo::float::kdtree::KdTree::new();
     for (i, v) in vertices.iter().enumerate() {
         tree.add(&[v.x, v.y, v.z], i as u64);
     }

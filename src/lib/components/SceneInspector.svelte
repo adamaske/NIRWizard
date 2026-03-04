@@ -2,66 +2,58 @@
   import { onMount, onDestroy } from 'svelte';
   import { listen } from '@tauri-apps/api/event';
   import { invoke } from '@tauri-apps/api/core';
-  import { cortexState, scalpState, optodeState,
-           defaultCortexState, defaultScalpState, defaultOptodeState } from '../stores/sceneState.js';
+  import { anatomyLayerStates, optodeState, defaultOptodeState } from '../stores/sceneState.js';
   import SceneObjectEditor from './SceneObjectEditor.svelte';
   import OptodeLayoutEditor from './OptodeLayoutEditor.svelte';
 
-  let hasCortex = false;
-  let hasScalp  = false;
-  let hasProbe  = false;
+  // Display order and labels for anatomy layers
+  const LAYER_ORDER  = ['skull', 'csf', 'grey_matter', 'white_matter'];
+  const LAYER_LABELS = {
+    skull:        'Skull',
+    csf:          'CSF',
+    grey_matter:  'Grey Matter',
+    white_matter: 'White Matter',
+  };
 
-  let cortexExpanded = true;
-  let scalpExpanded  = true;
-  let probeExpanded  = true;
-
-  let localCortex = null;
-  let localScalp  = null;
-  let localProbe  = null;
+  let hasProbe = false;
+  let probeExpanded = true;
+  let layerExpanded = {};  // layer → bool
+  let localProbe = null;
 
   const unlistenFns = [];
+  const unsubProbe = optodeState.subscribe(s => { localProbe = s; });
 
-  // Keep local copies in sync with stores (for display)
-  const unsubCortex = cortexState.subscribe(s => { localCortex = s; });
-  const unsubScalp  = scalpState.subscribe(s => { localScalp  = s; });
-  const unsubProbe  = optodeState.subscribe(s => { localProbe  = s; });
+  // Derive ordered list of loaded layers from store
+  $: loadedLayers = LAYER_ORDER.filter(l => $anatomyLayerStates[l] != null);
 
   onMount(async () => {
-    unlistenFns.push(await listen('cortex-loaded', () => { hasCortex = true; }));
-    unlistenFns.push(await listen('scalp-loaded',  () => { hasScalp  = true; }));
-    unlistenFns.push(await listen('snirf-loaded',  () => { hasProbe  = true; }));
+    // anatomy-loaded just tells us layers are ready; the store is populated by Viewport3D
+    unlistenFns.push(await listen('anatomy-loaded', (e) => {
+      for (const layer of e.payload.layers) {
+        if (layerExpanded[layer] === undefined) layerExpanded[layer] = true;
+        // Reassign to trigger Svelte reactivity on the object
+        layerExpanded = layerExpanded;
+      }
+    }));
+    unlistenFns.push(await listen('snirf-loaded', () => { hasProbe = true; }));
   });
 
   onDestroy(() => {
     for (const u of unlistenFns) u();
-    unsubCortex();
-    unsubScalp();
     unsubProbe();
   });
 
-  function onCortexChange(e) {
+  function onLayerChange(layer, e) {
     const s = e.detail;
-    cortexState.set(s);
-    invoke('set_cortex_transform', {
+    anatomyLayerStates.update(m => ({ ...m, [layer]: s }));
+    invoke('set_anatomy_transform', {
+      layer,
       position: s.position,
       rotation: s.rotation,
       scale: s.scale,
     }).catch(console.error);
-    invoke('set_cortex_opacity', {
-      opacity: s.opacity,
-      visible: s.visible,
-    }).catch(console.error);
-  }
-
-  function onScalpChange(e) {
-    const s = e.detail;
-    scalpState.set(s);
-    invoke('set_scalp_transform', {
-      position: s.position,
-      rotation: s.rotation,
-      scale: s.scale,
-    }).catch(console.error);
-    invoke('set_scalp_opacity', {
+    invoke('set_anatomy_opacity', {
+      layer,
       opacity: s.opacity,
       visible: s.visible,
     }).catch(console.error);
@@ -85,37 +77,21 @@
 <aside class="scene-inspector">
   <div class="inspector-title">Scene Inspector</div>
 
-  {#if hasCortex && localCortex}
+  {#each loadedLayers as layer (layer)}
     <section>
       <!-- svelte-ignore a11y-no-static-element-interactions -->
       <!-- svelte-ignore a11y-click-events-have-key-events -->
-      <div class="section-header" on:click={() => (cortexExpanded = !cortexExpanded)}>
-        <span class="chevron">{cortexExpanded ? '▾' : '▸'}</span>
-        Cortex
+      <div class="section-header" on:click={() => { layerExpanded[layer] = !layerExpanded[layer]; layerExpanded = layerExpanded; }}>
+        <span class="chevron">{layerExpanded[layer] ? '▾' : '▸'}</span>
+        {LAYER_LABELS[layer] ?? layer}
       </div>
-      {#if cortexExpanded}
+      {#if layerExpanded[layer]}
         <div class="section-body">
-          <SceneObjectEditor state={localCortex} on:change={onCortexChange} />
+          <SceneObjectEditor state={$anatomyLayerStates[layer]} on:change={e => onLayerChange(layer, e)} />
         </div>
       {/if}
     </section>
-  {/if}
-
-  {#if hasScalp && localScalp}
-    <section>
-      <!-- svelte-ignore a11y-no-static-element-interactions -->
-      <!-- svelte-ignore a11y-click-events-have-key-events -->
-      <div class="section-header" on:click={() => (scalpExpanded = !scalpExpanded)}>
-        <span class="chevron">{scalpExpanded ? '▾' : '▸'}</span>
-        Scalp
-      </div>
-      {#if scalpExpanded}
-        <div class="section-body">
-          <SceneObjectEditor state={localScalp} on:change={onScalpChange} />
-        </div>
-      {/if}
-    </section>
-  {/if}
+  {/each}
 
   {#if hasProbe && localProbe}
     <section>
@@ -133,8 +109,8 @@
     </section>
   {/if}
 
-  {#if !hasCortex && !hasScalp && !hasProbe}
-    <div class="empty">Load a SNIRF or OBJ file to inspect scene objects.</div>
+  {#if loadedLayers.length === 0 && !hasProbe}
+    <div class="empty">Load a SNIRF or MRI file to inspect scene objects.</div>
   {/if}
 </aside>
 

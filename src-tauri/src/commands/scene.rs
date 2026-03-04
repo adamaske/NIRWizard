@@ -1,11 +1,10 @@
 use nalgebra as na;
 use serde::Serialize;
-use tauri::Emitter;
 
+use crate::domain::anatomy::SubjectAnatomy;
 use crate::domain::mesh::MeshGeometry;
 use crate::domain::probe::OptodeLayout;
 use crate::domain::scene::{SceneObject, Transform};
-use crate::io::mesh_importer;
 use crate::state::AppState;
 
 fn transform_from_arrays(position: [f64; 3], rotation: [f64; 3], scale: [f64; 3]) -> Transform {
@@ -51,116 +50,76 @@ fn to_payload(geometry: &MeshGeometry) -> MeshGeometryPayload {
     }
 }
 
-fn load_obj_into(
-    path: &str,
-    state: &tauri::State<AppState>,
-    cortex: bool,
-) -> Result<SceneObjectSummary, String> {
-    let mesh = mesh_importer::load_mesh(path)?;
-    let name = mesh.name.clone();
-    let filepath = mesh.filepath.clone();
-    let vertex_count = mesh.geometry.verts.len();
-    let triangle_count = mesh.geometry.indices.len() / 3;
-    let obj = SceneObject::new(name.clone(), mesh);
-    let mut session = state.session.write().map_err(|e| e.to_string())?;
-    if cortex {
-        session.cortex_scene = Some(obj);
-    } else {
-        session.scalp_scene = Some(obj);
+fn get_layer<'a>(anatomy: &'a SubjectAnatomy, layer: &str) -> Result<&'a SceneObject, String> {
+    match layer {
+        "skull"        => anatomy.skull.as_ref(),
+        "csf"          => anatomy.csf.as_ref(),
+        "grey_matter"  => anatomy.grey_matter.as_ref(),
+        "white_matter" => anatomy.white_matter.as_ref(),
+        _              => None,
     }
-    Ok(SceneObjectSummary { name, vertex_count, triangle_count, filepath })
+    .ok_or_else(|| format!("Layer '{layer}' not loaded"))
+}
+
+fn get_layer_mut<'a>(
+    anatomy: &'a mut SubjectAnatomy,
+    layer: &str,
+) -> Result<&'a mut SceneObject, String> {
+    match layer {
+        "skull"        => anatomy.skull.as_mut(),
+        "csf"          => anatomy.csf.as_mut(),
+        "grey_matter"  => anatomy.grey_matter.as_mut(),
+        "white_matter" => anatomy.white_matter.as_mut(),
+        _              => None,
+    }
+    .ok_or_else(|| format!("Layer '{layer}' not loaded"))
 }
 
 #[tauri::command]
-pub fn load_cortex_obj(
-    path: String,
+pub fn get_anatomy_geometry(
+    layer: String,
     state: tauri::State<AppState>,
-    app: tauri::AppHandle,
-) -> Result<SceneObjectSummary, String> {
-    let summary = load_obj_into(&path, &state, true)?;
-    app.emit("cortex-loaded", summary.clone()).map_err(|e| e.to_string())?;
-    Ok(summary)
+) -> Result<MeshGeometryPayload, String> {
+    let session = state.session.read().map_err(|e| e.to_string())?;
+    let anatomy = session.subject_anatomy.as_ref().ok_or("No anatomy loaded")?;
+    let obj = get_layer(anatomy, &layer)?;
+    Ok(to_payload(&obj.mesh.geometry))
 }
 
 #[tauri::command]
-pub fn load_scalp_obj(
-    path: String,
+pub fn set_anatomy_transform(
+    layer: String,
+    position: [f64; 3],
+    rotation: [f64; 3],
+    scale: [f64; 3],
     state: tauri::State<AppState>,
-    app: tauri::AppHandle,
-) -> Result<SceneObjectSummary, String> {
-    let summary = load_obj_into(&path, &state, false)?;
-    app.emit("scalp-loaded", summary.clone()).map_err(|e| e.to_string())?;
-    Ok(summary)
+) -> Result<(), String> {
+    let mut session = state.session.write().map_err(|e| e.to_string())?;
+    let anatomy = session.subject_anatomy.as_mut().ok_or("No anatomy loaded")?;
+    let obj = get_layer_mut(anatomy, &layer)?;
+    obj.transform = transform_from_arrays(position, rotation, scale);
+    Ok(())
 }
 
 #[tauri::command]
-pub fn get_cortex_geometry(state: tauri::State<AppState>) -> Option<MeshGeometryPayload> {
-    let session = state.session.read().ok()?;
-    Some(to_payload(&session.cortex_scene.as_ref()?.mesh.geometry))
-}
-
-#[tauri::command]
-pub fn get_scalp_geometry(state: tauri::State<AppState>) -> Option<MeshGeometryPayload> {
-    let session = state.session.read().ok()?;
-    Some(to_payload(&session.scalp_scene.as_ref()?.mesh.geometry))
+pub fn set_anatomy_opacity(
+    layer: String,
+    opacity: f64,
+    visible: bool,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let mut session = state.session.write().map_err(|e| e.to_string())?;
+    let anatomy = session.subject_anatomy.as_mut().ok_or("No anatomy loaded")?;
+    let obj = get_layer_mut(anatomy, &layer)?;
+    obj.opacity = opacity;
+    obj.visible = visible;
+    Ok(())
 }
 
 #[tauri::command]
 pub fn get_optode_layout_3d(state: tauri::State<AppState>) -> Option<OptodeLayout> {
     let session = state.session.read().ok()?;
     session.optode_layout.clone()
-}
-
-#[tauri::command]
-pub fn set_cortex_transform(
-    position: [f64; 3],
-    rotation: [f64; 3],
-    scale: [f64; 3],
-    state: tauri::State<AppState>,
-) -> Result<(), String> {
-    let mut session = state.session.write().map_err(|e| e.to_string())?;
-    let obj = session.cortex_scene.as_mut().ok_or("No cortex loaded")?;
-    obj.transform = transform_from_arrays(position, rotation, scale);
-    Ok(())
-}
-
-#[tauri::command]
-pub fn set_scalp_transform(
-    position: [f64; 3],
-    rotation: [f64; 3],
-    scale: [f64; 3],
-    state: tauri::State<AppState>,
-) -> Result<(), String> {
-    let mut session = state.session.write().map_err(|e| e.to_string())?;
-    let obj = session.scalp_scene.as_mut().ok_or("No scalp loaded")?;
-    obj.transform = transform_from_arrays(position, rotation, scale);
-    Ok(())
-}
-
-#[tauri::command]
-pub fn set_cortex_opacity(
-    opacity: f64,
-    visible: bool,
-    state: tauri::State<AppState>,
-) -> Result<(), String> {
-    let mut session = state.session.write().map_err(|e| e.to_string())?;
-    let obj = session.cortex_scene.as_mut().ok_or("No cortex loaded")?;
-    obj.opacity = opacity;
-    obj.visible = visible;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn set_scalp_opacity(
-    opacity: f64,
-    visible: bool,
-    state: tauri::State<AppState>,
-) -> Result<(), String> {
-    let mut session = state.session.write().map_err(|e| e.to_string())?;
-    let obj = session.scalp_scene.as_mut().ok_or("No scalp loaded")?;
-    obj.opacity = opacity;
-    obj.visible = visible;
-    Ok(())
 }
 
 #[tauri::command]

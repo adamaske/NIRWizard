@@ -19,6 +19,10 @@
     const optode_radius = parseFloat(e.target.value);
     dispatch('change', { ...state, settings: { ...state.settings, optode_radius } });
   }
+
+  function onVisible(e) {
+    dispatch('change', { ...state, visible: e.target.checked });
+  }
 </script>
 
 {#if state}
@@ -39,12 +43,16 @@
     <div class="prop-row">
       <span class="prop-label">Radius</span>
       <input
-        type="range" min="0.001" max="0.05" step="0.001"
+        type="number" step="0.1"
         value={state.settings.optode_radius}
-        on:input={onRadius}
-        class="slider"
+        on:change={onRadius}
+        class="num-input"
       />
-      <span class="prop-value">{state.settings.optode_radius.toFixed(3)}</span>
+    </div>
+
+    <div class="prop-row">
+      <span class="prop-label">Visible</span>
+      <input type="checkbox" checked={state.visible} on:change={onVisible} />
     </div>
   </div>
 {/if}
@@ -75,6 +83,18 @@
     flex: 1;
     accent-color: var(--accent-green);
     min-width: 0;
+  }
+
+  .num-input {
+    flex: 1;
+    min-width: 0;
+    background: var(--bg-base);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    font-family: monospace;
+    font-size: 10px;
+    padding: 2px 4px;
+    border-radius: 3px;
   }
 
   .prop-value {

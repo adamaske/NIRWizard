@@ -1,24 +1,26 @@
 import { writable } from 'svelte/store';
 
-// Default transform: identity
 const defaultTransform = () => ({ position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] });
 
-// cortexState / scalpState: null until the object is loaded
-// Shape: { position:[x,y,z], rotation:[x,y,z], scale:[x,y,z], opacity:f, visible:bool }
-export const cortexState = writable(null);
-export const scalpState  = writable(null);
+// Per-layer default opacity
+const LAYER_OPACITY = {
+  skull:        0.5,
+  csf:          0.4,
+  grey_matter:  0.7,
+  white_matter: 0.9,
+};
 
-export const defaultCortexState = () => ({
-  ...defaultTransform(),
-  opacity: 0.7,
-  visible: true,
-});
+export function defaultLayerState(layer) {
+  return {
+    ...defaultTransform(),
+    opacity: LAYER_OPACITY[layer] ?? 1.0,
+    visible: true,
+  };
+}
 
-export const defaultScalpState = () => ({
-  ...defaultTransform(),
-  opacity: 0.3,
-  visible: true,
-});
+// anatomyLayerStates: plain object keyed by layer name, null until anatomy is loaded
+// Shape: { [layer]: { position, rotation, scale, opacity, visible } }
+export const anatomyLayerStates = writable({});
 
 // optodeState: null until probe is loaded
 // Shape: { transform:{position,rotation,scale}, settings:{spread_factor,optode_radius} }
@@ -28,6 +30,7 @@ export const defaultOptodeState = () => ({
   transform: defaultTransform(),
   settings: {
     spread_factor: 1.0,
-    optode_radius: 0.005,
+    optode_radius: 2.0,
   },
+  visible: true,
 });

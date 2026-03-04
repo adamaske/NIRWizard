@@ -1,11 +1,11 @@
 use crate::domain::mesh::Mesh;
 use nalgebra as na;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// A 3D transform — position, rotation, scale.
 /// Cached matrix is recomputed when components change.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Transform {
     pub position: na::Vector3<f64>,
     pub rotation: na::Vector3<f64>, // Euler angles in degrees
@@ -46,7 +46,7 @@ impl Transform {
 }
 
 /// Metadata tags for any scene object
-#[derive(Debug, Clone, Serialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ObjectMeta {
     pub name: String,
     pub tags: HashMap<String, String>,
@@ -56,7 +56,7 @@ pub struct ObjectMeta {
 ///
 /// This is the Rust-side representation. The frontend (Three.js) maintains
 /// its own Mesh/BufferGeometry — we send flat arrays via invoke().
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SceneObject {
     pub meta: ObjectMeta,
     pub mesh: Mesh,
