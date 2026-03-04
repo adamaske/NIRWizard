@@ -8,6 +8,7 @@
   import DataPlotter from "./lib/components/DataPlotter.svelte";
   import PipelineEditor from "./lib/pipeline/PipelineEditor.svelte";
   import Viewport3D from "./lib/components/Viewport3D.svelte";
+  import SceneInspector from "./lib/components/SceneInspector.svelte";
   import Statusbar from "./lib/components/statusbar.svelte";
 
   let activeTab = "info";
@@ -157,7 +158,10 @@
         {:else if activeTab === "pipeline"}
           <PipelineEditor />
         {:else}
-          <Viewport3D />
+          <div class="scene-view">
+            <Viewport3D />
+            <SceneInspector />
+          </div>
         {/if}
       </div>
     </div>
@@ -288,5 +292,13 @@
   .tab-btn.active {
     color: var(--accent-green);
     border-bottom-color: var(--accent-green);
+  }
+
+  .scene-view {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+    overflow: hidden;
   }
 </style>

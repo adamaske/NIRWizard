@@ -1,11 +1,20 @@
+use nalgebra as na;
 use serde::Serialize;
 use tauri::Emitter;
 
 use crate::domain::mesh::MeshGeometry;
 use crate::domain::probe::OptodeLayout;
-use crate::domain::scene::SceneObject;
+use crate::domain::scene::{SceneObject, Transform};
 use crate::io::mesh_importer;
 use crate::state::AppState;
+
+fn transform_from_arrays(position: [f64; 3], rotation: [f64; 3], scale: [f64; 3]) -> Transform {
+    Transform {
+        position: na::Vector3::new(position[0], position[1], position[2]),
+        rotation: na::Vector3::new(rotation[0], rotation[1], rotation[2]),
+        scale:    na::Vector3::new(scale[0], scale[1], scale[2]),
+    }
+}
 
 /// Lightweight summary returned to the frontend after loading a scene object.
 #[derive(Serialize, Clone, Debug)]
@@ -100,4 +109,82 @@ pub fn get_scalp_geometry(state: tauri::State<AppState>) -> Option<MeshGeometryP
 pub fn get_optode_layout_3d(state: tauri::State<AppState>) -> Option<OptodeLayout> {
     let session = state.session.read().ok()?;
     session.optode_layout.clone()
+}
+
+#[tauri::command]
+pub fn set_cortex_transform(
+    position: [f64; 3],
+    rotation: [f64; 3],
+    scale: [f64; 3],
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let mut session = state.session.write().map_err(|e| e.to_string())?;
+    let obj = session.cortex_scene.as_mut().ok_or("No cortex loaded")?;
+    obj.transform = transform_from_arrays(position, rotation, scale);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_scalp_transform(
+    position: [f64; 3],
+    rotation: [f64; 3],
+    scale: [f64; 3],
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let mut session = state.session.write().map_err(|e| e.to_string())?;
+    let obj = session.scalp_scene.as_mut().ok_or("No scalp loaded")?;
+    obj.transform = transform_from_arrays(position, rotation, scale);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_cortex_opacity(
+    opacity: f64,
+    visible: bool,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let mut session = state.session.write().map_err(|e| e.to_string())?;
+    let obj = session.cortex_scene.as_mut().ok_or("No cortex loaded")?;
+    obj.opacity = opacity;
+    obj.visible = visible;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_scalp_opacity(
+    opacity: f64,
+    visible: bool,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let mut session = state.session.write().map_err(|e| e.to_string())?;
+    let obj = session.scalp_scene.as_mut().ok_or("No scalp loaded")?;
+    obj.opacity = opacity;
+    obj.visible = visible;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_optode_layout_transform(
+    position: [f64; 3],
+    rotation: [f64; 3],
+    scale: [f64; 3],
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let mut session = state.session.write().map_err(|e| e.to_string())?;
+    let layout = session.optode_layout.as_mut().ok_or("No probe loaded")?;
+    layout.transform = transform_from_arrays(position, rotation, scale);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_optode_layout_settings(
+    spread_factor: f64,
+    optode_radius: f64,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let mut session = state.session.write().map_err(|e| e.to_string())?;
+    let layout = session.optode_layout.as_mut().ok_or("No probe loaded")?;
+    layout.settings.spread_factor = spread_factor;
+    layout.settings.optode_radius = optode_radius;
+    Ok(())
 }

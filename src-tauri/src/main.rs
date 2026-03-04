@@ -46,6 +46,12 @@ fn main() {
             commands::scene::get_cortex_geometry,
             commands::scene::get_scalp_geometry,
             commands::scene::get_optode_layout_3d,
+            commands::scene::set_cortex_transform,
+            commands::scene::set_scalp_transform,
+            commands::scene::set_cortex_opacity,
+            commands::scene::set_scalp_opacity,
+            commands::scene::set_optode_layout_transform,
+            commands::scene::set_optode_layout_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

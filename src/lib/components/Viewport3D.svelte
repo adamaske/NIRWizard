@@ -1,34 +1,45 @@
 <script>
   import { onMount, onDestroy } from "svelte";
+  import { get } from "svelte/store";
   import * as THREE from "three";
   import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import {
+    cortexState, scalpState, optodeState,
+    defaultCortexState, defaultScalpState, defaultOptodeState,
+  } from "../stores/sceneState.js";
 
   let containerEl;
   let renderer, scene, camera, controls, animId, ro;
   const unlistenFns = [];
+  const storeUnsubs = [];
 
-  // Retained scene object references for removal/replacement
+  // Retained scene object references
   let cortexMesh = null;
-  let scalpMesh = null;
+  let scalpMesh  = null;
   let optodeGroup = null;
+  let cachedLayout = null;   // raw layout from Rust; rebuilt when settings change
   let cameraFitted = false;
+
+  // ── Geometry helpers ──────────────────────────────────────────────────────
 
   function buildBufferGeometry(payload) {
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute(
-      "position",
-      new THREE.BufferAttribute(new Float32Array(payload.positions), 3),
-    );
-    geo.setAttribute(
-      "normal",
-      new THREE.BufferAttribute(new Float32Array(payload.normals), 3),
-    );
-    geo.setIndex(
-      new THREE.BufferAttribute(new Uint32Array(payload.indices), 1),
-    );
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(payload.positions), 3));
+    geo.setAttribute("normal",   new THREE.BufferAttribute(new Float32Array(payload.normals), 3));
+    geo.setIndex(new THREE.BufferAttribute(new Uint32Array(payload.indices), 1));
     return geo;
+  }
+
+  function applyTransformToObject(obj, t) {
+    obj.position.set(...t.position);
+    obj.rotation.set(
+      THREE.MathUtils.degToRad(t.rotation[0]),
+      THREE.MathUtils.degToRad(t.rotation[1]),
+      THREE.MathUtils.degToRad(t.rotation[2]),
+    );
+    obj.scale.set(...t.scale);
   }
 
   function autoFitCamera() {
@@ -39,7 +50,7 @@
     }
     if (box.isEmpty()) return;
     const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
+    const size   = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
     if (maxDim < 0.0001) return;
     camera.position.copy(center);
@@ -49,19 +60,69 @@
     cameraFitted = true;
   }
 
+  // ── Build optode group from cached layout + given settings ────────────────
+
+  function buildOptodeGroup(settings) {
+    if (!cachedLayout) return;
+    if (optodeGroup) scene.remove(optodeGroup);
+    optodeGroup = new THREE.Group();
+
+    const sf = settings.spread_factor;
+    const r  = settings.optode_radius;
+    const [tx, ty, tz] = cachedLayout.settings.projection_target;
+    const target = new THREE.Vector3(tx, ty, tz);
+    const sphereGeo = new THREE.SphereGeometry(r, 8, 8);
+
+    for (const o of cachedLayout.sources) {
+      const mesh = new THREE.Mesh(sphereGeo, new THREE.MeshStandardMaterial({ color: 0xdd3333 }));
+      const [x, y, z] = o.position;
+      mesh.position.set(x * sf, y * sf, z * sf);
+      mesh.lookAt(target);
+      optodeGroup.add(mesh);
+    }
+
+    for (const o of cachedLayout.detectors) {
+      const mesh = new THREE.Mesh(sphereGeo, new THREE.MeshStandardMaterial({ color: 0x3355dd }));
+      const [x, y, z] = o.position;
+      mesh.position.set(x * sf, y * sf, z * sf);
+      mesh.lookAt(target);
+      optodeGroup.add(mesh);
+    }
+
+    const linePoints = [];
+    for (const ch of cachedLayout.channels) {
+      const src = cachedLayout.sources[ch.source_idx];
+      const det = cachedLayout.detectors[ch.detector_idx];
+      if (!src || !det) continue;
+      const [sx, sy, sz] = src.position;
+      const [dx, dy, dz] = det.position;
+      linePoints.push(sx * sf, sy * sf, sz * sf, dx * sf, dy * sf, dz * sf);
+    }
+
+    if (linePoints.length > 0) {
+      const lineGeo = new THREE.BufferGeometry();
+      lineGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(linePoints), 3));
+      optodeGroup.add(new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x6e6e8a })));
+    }
+
+    scene.add(optodeGroup);
+    autoFitCamera();
+  }
+
+  // ── Scene loaders ─────────────────────────────────────────────────────────
+
   async function loadCortexIntoScene() {
     const payload = await invoke("get_cortex_geometry");
     if (!payload) return;
     if (cortexMesh) scene.remove(cortexMesh);
     cortexMesh = new THREE.Mesh(
       buildBufferGeometry(payload),
-      new THREE.MeshStandardMaterial({
-        color: 0x886644,
-        transparent: true,
-        opacity: 0.7,
-      }),
+      new THREE.MeshStandardMaterial({ color: 0x886644, transparent: true, opacity: 0.7 }),
     );
     scene.add(cortexMesh);
+    if (get(cortexState) === null) {
+      cortexState.set(defaultCortexState());
+    }
     autoFitCamera();
   }
 
@@ -71,79 +132,32 @@
     if (scalpMesh) scene.remove(scalpMesh);
     scalpMesh = new THREE.Mesh(
       buildBufferGeometry(payload),
-      new THREE.MeshStandardMaterial({
-        color: 0xddbbaa,
-        transparent: true,
-        opacity: 0.3,
-      }),
+      new THREE.MeshStandardMaterial({ color: 0xddbbaa, transparent: true, opacity: 0.3 }),
     );
     scene.add(scalpMesh);
+    if (get(scalpState) === null) {
+      scalpState.set(defaultScalpState());
+    }
     autoFitCamera();
   }
 
   async function loadOptodeLayoutIntoScene() {
     const layout = await invoke("get_optode_layout_3d");
     if (!layout) return;
+    cachedLayout = layout;
 
-    if (optodeGroup) scene.remove(optodeGroup);
-    optodeGroup = new THREE.Group();
+    const current = get(optodeState);
+    const settings = current ? current.settings : layout.settings;
+    buildOptodeGroup(settings);
 
-    const sf = layout.settings.spread_factor;
-    const r = layout.settings.optode_radius;
-    const [tx, ty, tz] = layout.settings.projection_target;
-    const target = new THREE.Vector3(tx, ty, tz);
-    const sphereGeo = new THREE.SphereGeometry(r, 8, 8);
-
-    for (const o of layout.sources) {
-      const mesh = new THREE.Mesh(
-        sphereGeo,
-        new THREE.MeshStandardMaterial({ color: 0xdd3333 }),
-      );
-      const [x, y, z] = o.position;
-      mesh.position.set(x * sf, y * sf, z * sf);
-      mesh.lookAt(target);
-      optodeGroup.add(mesh);
+    if (current !== null) {
+      applyTransformToObject(optodeGroup, current.transform);
+    } else {
+      optodeState.set(defaultOptodeState());
     }
-
-    for (const o of layout.detectors) {
-      const mesh = new THREE.Mesh(
-        sphereGeo,
-        new THREE.MeshStandardMaterial({ color: 0x3355dd }),
-      );
-      const [x, y, z] = o.position;
-      mesh.position.set(x * sf, y * sf, z * sf);
-      mesh.lookAt(target);
-      optodeGroup.add(mesh);
-    }
-
-    // Channel lines as a single LineSegments draw call
-    const linePoints = [];
-    for (const ch of layout.channels) {
-      const src = layout.sources[ch.source_idx];
-      const det = layout.detectors[ch.detector_idx];
-      if (!src || !det) continue;
-      const [sx, sy, sz] = src.position;
-      const [dx, dy, dz] = det.position;
-      linePoints.push(sx * sf, sy * sf, sz * sf, dx * sf, dy * sf, dz * sf);
-    }
-
-    if (linePoints.length > 0) {
-      const lineGeo = new THREE.BufferGeometry();
-      lineGeo.setAttribute(
-        "position",
-        new THREE.BufferAttribute(new Float32Array(linePoints), 3),
-      );
-      optodeGroup.add(
-        new THREE.LineSegments(
-          lineGeo,
-          new THREE.LineBasicMaterial({ color: 0x6e6e8a }),
-        ),
-      );
-    }
-
-    scene.add(optodeGroup);
-    autoFitCamera();
   }
+
+  // ── Mount / Destroy ───────────────────────────────────────────────────────
 
   onMount(async () => {
     scene = new THREE.Scene();
@@ -179,12 +193,32 @@
     });
     ro.observe(containerEl);
 
-    // Register event listeners; store unlisten fns for cleanup
+    // Tauri event listeners
     unlistenFns.push(await listen("cortex-loaded", () => loadCortexIntoScene()));
-    unlistenFns.push(await listen("scalp-loaded", () => loadScalpIntoScene()));
-    unlistenFns.push(
-      await listen("snirf-loaded", () => loadOptodeLayoutIntoScene()),
-    );
+    unlistenFns.push(await listen("scalp-loaded",  () => loadScalpIntoScene()));
+    unlistenFns.push(await listen("snirf-loaded",  () => loadOptodeLayoutIntoScene()));
+
+    // Store subscriptions — apply changes to Three.js objects immediately
+    storeUnsubs.push(cortexState.subscribe(s => {
+      if (!cortexMesh || !s) return;
+      applyTransformToObject(cortexMesh, s);
+      cortexMesh.material.opacity = s.opacity;
+      cortexMesh.visible = s.visible;
+    }));
+
+    storeUnsubs.push(scalpState.subscribe(s => {
+      if (!scalpMesh || !s) return;
+      applyTransformToObject(scalpMesh, s);
+      scalpMesh.material.opacity = s.opacity;
+      scalpMesh.visible = s.visible;
+    }));
+
+    storeUnsubs.push(optodeState.subscribe(s => {
+      if (!s) return;
+      if (optodeGroup) applyTransformToObject(optodeGroup, s.transform);
+      // Rebuild geometry from cached layout using current settings (no round-trip needed)
+      if (cachedLayout) buildOptodeGroup(s.settings);
+    }));
 
     function animate() {
       animId = requestAnimationFrame(animate);
@@ -200,6 +234,7 @@
     controls?.dispose();
     renderer?.dispose();
     for (const unlisten of unlistenFns) unlisten();
+    for (const unsub of storeUnsubs) unsub();
   });
 </script>
 

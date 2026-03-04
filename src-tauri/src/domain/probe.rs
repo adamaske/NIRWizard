@@ -1,3 +1,4 @@
+use crate::domain::scene::Transform;
 use crate::domain::snirf::SNIRF;
 use nalgebra::Vector3;
 use serde::Serialize;
@@ -44,6 +45,7 @@ pub struct OptodeLayout {
     pub detectors: Vec<Optode3D>,
     pub channels: Vec<ChannelConnection>,
     pub settings: ProbeDisplaySettings,
+    pub transform: Transform,
 }
 
 impl OptodeLayout {
@@ -103,6 +105,7 @@ impl OptodeLayout {
             detectors,
             channels,
             settings: ProbeDisplaySettings::default(),
+            transform: Transform::default(),
         }
     }
 }
