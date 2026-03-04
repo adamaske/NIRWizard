@@ -9,3 +9,5 @@ pub mod probe;
 pub use probe::{ChannelConnection, Optode3D, OptodeLayout, ProbeDisplaySettings};
 pub mod anatomy;
 pub use anatomy::SubjectAnatomy;
+pub mod voxel;
+pub use voxel::VoxelVolume;

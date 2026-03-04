@@ -3,6 +3,7 @@ pub mod probe;
 pub mod scene;
 mod summary;
 pub mod timeseries;
+pub mod voxel;
 
 pub use summary::SnirfSummary;
 use tauri::Emitter;

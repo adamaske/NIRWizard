@@ -31,6 +31,9 @@ fn main() {
             commands::scene::set_optode_layout_transform,
             commands::scene::set_optode_layout_settings,
             commands::anatomy::load_mri,
+            commands::voxel::list_voxel_volumes,
+            commands::voxel::get_voxel_volume_info,
+            commands::voxel::get_voxel_slice,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

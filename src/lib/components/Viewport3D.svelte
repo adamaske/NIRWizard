@@ -10,7 +10,10 @@
     defaultLayerState,
     optodeState,
     defaultOptodeState,
+    voxelVolumeStates,
+    defaultVoxelState,
   } from "../stores/sceneState.js";
+  import { labelToColor } from "../utils/colormap.js";
 
   let containerEl;
   let renderer, scene, camera, controls, animId, ro;
@@ -18,11 +21,12 @@
   const storeUnsubs = [];
 
   // Retained scene object references
-  const layerMeshes = new Map();
-  let optodeGroup   = null;
-  let channelLines  = null;  // LineSegments reference for colour updates
-  let cachedLayout  = null;  // raw layout from Rust; rebuilt when settings change
-  let cameraFitted  = false;
+  const layerMeshes  = new Map();
+  const voxelObjects = new Map(); // volume name → { mesh: InstancedMesh, info: VoxelVolumeInfo }
+  let optodeGroup    = null;
+  let channelLines   = null;  // LineSegments reference for colour updates
+  let cachedLayout   = null;  // raw layout from Rust; rebuilt when settings change
+  let cameraFitted   = false;
   let selectedChannelIds = new Set();
 
   // renderOrder: lower = rendered first (back-to-front for transparency)
@@ -83,6 +87,7 @@
     if (cameraFitted) return;
     const box = new THREE.Box3();
     for (const mesh of layerMeshes.values()) box.expandByObject(mesh);
+    for (const { mesh } of voxelObjects.values()) if (mesh.count > 0) box.expandByObject(mesh);
     if (optodeGroup) box.expandByObject(optodeGroup);
     if (box.isEmpty()) return;
     const center = box.getCenter(new THREE.Vector3());
@@ -221,6 +226,80 @@
     }
   }
 
+  // ── Voxel volume rendering ────────────────────────────────────────────────
+
+  async function initVoxelVolume(name) {
+    const info = await invoke("get_voxel_volume_info", { name });
+
+    // Extract voxel sizes from vox2ras column norms
+    const m = new THREE.Matrix4().fromArray(info.vox2ras);
+    const dx = new THREE.Vector3(m.elements[0], m.elements[1], m.elements[2]).length();
+    const dy = new THREE.Vector3(m.elements[4], m.elements[5], m.elements[6]).length();
+    const dz = new THREE.Vector3(m.elements[8], m.elements[9], m.elements[10]).length();
+
+    const maxVoxels = info.dims[0] * info.dims[1]; // worst-case slice size
+    const geo = new THREE.BoxGeometry(dx, dy, dz);
+    const mat = new THREE.MeshPhongMaterial({ vertexColors: false, shininess: 20 });
+    const mesh = new THREE.InstancedMesh(geo, mat, maxVoxels);
+    mesh.count = 0;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(mesh);
+
+    voxelObjects.set(name, { mesh, info, m });
+
+    // Initialise state in store
+    const current = get(voxelVolumeStates);
+    if (!current[name]) {
+      voxelVolumeStates.update(s => ({ ...s, [name]: defaultVoxelState(info) }));
+    }
+  }
+
+  async function renderVoxelSlice(name, state) {
+    const entry = voxelObjects.get(name);
+    if (!entry || !state || !state.visible) {
+      if (entry) entry.mesh.count = 0;
+      return;
+    }
+    const { mesh, info, m } = entry;
+
+    const sliceData = await invoke("get_voxel_slice", {
+      name,
+      axis: state.axis,
+      index: state.sliceIndex,
+    });
+
+    const maxLabel = Math.max(...info.labels_present, 1);
+    const dummy    = new THREE.Object3D();
+    const color    = new THREE.Color();
+    let   count    = 0;
+
+    for (let row = 0; row < sliceData.height; row++) {
+      for (let col = 0; col < sliceData.width; col++) {
+        const label = sliceData.labels[row * sliceData.width + col];
+        if (label === 0 || !state.visibleLabels.has(label)) continue;
+
+        // Map [col, row] → voxel [vx, vy, vz] depending on axis
+        let vx, vy, vz;
+        if (state.axis === 'x')      { [vx, vy, vz] = [state.sliceIndex, col, row]; }
+        else if (state.axis === 'y') { [vx, vy, vz] = [col, state.sliceIndex, row]; }
+        else                         { [vx, vy, vz] = [col, row, state.sliceIndex]; }
+
+        dummy.position.copy(new THREE.Vector3(vx, vy, vz).applyMatrix4(m));
+        dummy.updateMatrix();
+        mesh.setMatrixAt(count, dummy.matrix);
+
+        const hex = labelToColor(label, maxLabel);
+        color.setHex(hex);
+        mesh.setColorAt(count, color);
+        count++;
+      }
+    }
+
+    mesh.count = count;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }
+
   function updateChannelColors() {
     if (!channelLines || !cachedLayout) return;
     const GREY   = [0x6e / 255, 0x6e / 255, 0x8a / 255];
@@ -293,7 +372,14 @@
 
     // Tauri event listeners
     unlistenFns.push(
-      await listen("anatomy-loaded", (e) => loadAnatomyLayers(e.payload.layers)),
+      await listen("anatomy-loaded", async (e) => {
+        loadAnatomyLayers(e.payload.layers);
+        for (const name of (e.payload.voxel_volumes ?? [])) {
+          await initVoxelVolume(name);
+          const state = get(voxelVolumeStates)[name];
+          if (state) renderVoxelSlice(name, state);
+        }
+      }),
     );
     unlistenFns.push(
       await listen("snirf-loaded", () => loadOptodeLayoutIntoScene()),
@@ -326,6 +412,14 @@
     );
 
     storeUnsubs.push(
+      voxelVolumeStates.subscribe((states) => {
+        for (const [name, state] of Object.entries(states)) {
+          renderVoxelSlice(name, state);
+        }
+      }),
+    );
+
+    storeUnsubs.push(
       optodeState.subscribe((s) => {
         if (!s) return;
         if (optodeGroup) {
@@ -349,6 +443,7 @@
     ro?.disconnect();
     controls?.dispose();
     renderer?.dispose();
+    for (const { mesh } of voxelObjects.values()) mesh.dispose();
     for (const unlisten of unlistenFns) unlisten();
     for (const unsub of storeUnsubs) unsub();
   });

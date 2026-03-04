@@ -2,9 +2,10 @@
   import { onMount, onDestroy } from 'svelte';
   import { listen } from '@tauri-apps/api/event';
   import { invoke } from '@tauri-apps/api/core';
-  import { anatomyLayerStates, optodeState, defaultOptodeState } from '../stores/sceneState.js';
+  import { anatomyLayerStates, optodeState, voxelVolumeStates } from '../stores/sceneState.js';
   import SceneObjectEditor from './SceneObjectEditor.svelte';
   import OptodeLayoutEditor from './OptodeLayoutEditor.svelte';
+  import VoxelEditor from './VoxelEditor.svelte';
 
   // Display order and labels for anatomy layers
   const LAYER_ORDER  = ['skull', 'csf', 'grey_matter', 'white_matter'];
@@ -17,7 +18,9 @@
 
   let hasProbe = false;
   let probeExpanded = true;
-  let layerExpanded = {};  // layer → bool
+  let layerExpanded = {};   // layer → bool
+  let voxelExpanded = {};   // volume name → bool
+  let voxelInfos = {};      // volume name → VoxelVolumeInfo (fetched once)
   let localProbe = null;
 
   const unlistenFns = [];
@@ -25,14 +28,24 @@
 
   // Derive ordered list of loaded layers from store
   $: loadedLayers = LAYER_ORDER.filter(l => $anatomyLayerStates[l] != null);
+  $: loadedVolumes = Object.keys($voxelVolumeStates);
 
   onMount(async () => {
-    // anatomy-loaded just tells us layers are ready; the store is populated by Viewport3D
-    unlistenFns.push(await listen('anatomy-loaded', (e) => {
+    unlistenFns.push(await listen('anatomy-loaded', async (e) => {
       for (const layer of e.payload.layers) {
         if (layerExpanded[layer] === undefined) layerExpanded[layer] = true;
-        // Reassign to trigger Svelte reactivity on the object
         layerExpanded = layerExpanded;
+      }
+      // Fetch info for any newly announced voxel volumes
+      for (const name of (e.payload.voxel_volumes ?? [])) {
+        if (!voxelInfos[name]) {
+          voxelInfos[name] = await invoke('get_voxel_volume_info', { name });
+          voxelInfos = voxelInfos;
+        }
+        if (voxelExpanded[name] === undefined) {
+          voxelExpanded[name] = true;
+          voxelExpanded = voxelExpanded;
+        }
       }
     }));
     unlistenFns.push(await listen('snirf-loaded', () => { hasProbe = true; }));
@@ -57,6 +70,10 @@
       opacity: s.opacity,
       visible: s.visible,
     }).catch(console.error);
+  }
+
+  function onVoxelChange(name, e) {
+    voxelVolumeStates.update(m => ({ ...m, [name]: e.detail }));
   }
 
   function onOptodeChange(e) {
@@ -109,7 +126,30 @@
     </section>
   {/if}
 
-  {#if loadedLayers.length === 0 && !hasProbe}
+  {#each loadedVolumes as name (name)}
+    {#if voxelInfos[name] && $voxelVolumeStates[name]}
+      <section>
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <!-- svelte-ignore a11y-click-events-have-key-events -->
+        <div class="section-header" on:click={() => { voxelExpanded[name] = !voxelExpanded[name]; voxelExpanded = voxelExpanded; }}>
+          <span class="chevron">{voxelExpanded[name] ? '▾' : '▸'}</span>
+          {name}
+        </div>
+        {#if voxelExpanded[name]}
+          <div class="section-body">
+            <VoxelEditor
+              {name}
+              info={voxelInfos[name]}
+              state={$voxelVolumeStates[name]}
+              on:change={e => onVoxelChange(name, e)}
+            />
+          </div>
+        {/if}
+      </section>
+    {/if}
+  {/each}
+
+  {#if loadedLayers.length === 0 && !hasProbe && loadedVolumes.length === 0}
     <div class="empty">Load a SNIRF or MRI file to inspect scene objects.</div>
   {/if}
 </aside>

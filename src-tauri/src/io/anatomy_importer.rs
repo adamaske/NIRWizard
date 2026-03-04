@@ -1,9 +1,12 @@
 // Take in .nii.gz file
 use crate::domain::anatomy::SubjectAnatomy;
 use crate::domain::scene::SceneObject;
+use crate::domain::voxel::VoxelVolume;
 
+use nalgebra as na;
 use ndarray16::Array4;
 use neuroformats::{write_mgh, FsMgh, FsMghData};
+use std::collections::HashMap;
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::fs;
@@ -488,10 +491,95 @@ pub fn load_subject_anatomy(mri_path: &str) -> Result<SubjectAnatomy, String> {
         }
     };
 
+    let labels_mgz = cfg.subject_dir().join("mri").join("head_labels.mgz");
+
     Ok(SubjectAnatomy {
         skull: load_opt("skull"),
         csf: load_opt("csf"),
         grey_matter: load_opt("grey_matter"),
         white_matter: load_opt("white_matter"),
+        labels_mgz_path: if labels_mgz.is_file() { Some(labels_mgz) } else { None },
+    })
+}
+
+// ------------------------------------------------------------------
+// Voxel volume loader
+// ------------------------------------------------------------------
+
+/// Build the vox2ras (4×4) from an MGH header using the FreeSurfer convention.
+fn mgh_vox2ras(header: &neuroformats::FsMghHeader, nx: usize, ny: usize, nz: usize) -> na::Matrix4<f64> {
+    // mdc_raw: [xras(3), yras(3), zras(3)] — each triple is a direction cosine vector
+    let r = &header.mdc_raw;
+    let xras = na::Vector3::new(r[0] as f64, r[1] as f64, r[2] as f64);
+    let yras = na::Vector3::new(r[3] as f64, r[4] as f64, r[5] as f64);
+    let zras = na::Vector3::new(r[6] as f64, r[7] as f64, r[8] as f64);
+
+    // Mdc has xras, yras, zras as columns
+    let mdc = na::Matrix3::from_columns(&[xras, yras, zras]);
+
+    let dx = header.delta[0] as f64;
+    let dy = header.delta[1] as f64;
+    let dz = header.delta[2] as f64;
+    let d   = na::Matrix3::from_diagonal(&na::Vector3::new(dx, dy, dz));
+    let rd  = mdc * d;
+
+    let cras = na::Vector3::new(
+        header.p_xyz_c[0] as f64,
+        header.p_xyz_c[1] as f64,
+        header.p_xyz_c[2] as f64,
+    );
+    let half = na::Vector3::new(nx as f64 / 2.0, ny as f64 / 2.0, nz as f64 / 2.0);
+    let p0   = cras - rd * half;
+
+    na::Matrix4::new(
+        rd[(0,0)], rd[(0,1)], rd[(0,2)], p0[0],
+        rd[(1,0)], rd[(1,1)], rd[(1,2)], p0[1],
+        rd[(2,0)], rd[(2,1)], rd[(2,2)], p0[2],
+        0.0,       0.0,       0.0,       1.0,
+    )
+}
+
+/// Load head_labels.mgz into a VoxelVolume.
+pub fn load_head_labels_volume(path: &PathBuf) -> Result<VoxelVolume, String> {
+    println!("[voxel] Loading head_labels.mgz: {}", path.display());
+
+    let mgh = FsMgh::from_file(path)
+        .map_err(|e| format!("Cannot read head_labels.mgz: {e}"))?;
+
+    let arr = mgh.data.mri_uchar.as_ref()
+        .ok_or("head_labels.mgz is not MRI_UCHAR dtype")?;
+
+    let (nx, ny, nz, _) = arr.dim();
+
+    // Flatten: labels[x + y*nx + z*nx*ny]
+    let mut labels = Vec::with_capacity(nx * ny * nz);
+    for k in 0..nz {
+        for j in 0..ny {
+            for i in 0..nx {
+                labels.push(arr[[i, j, k, 0]]);
+            }
+        }
+    }
+
+    let vox2ras = if mgh.header.is_ras_good == 1 {
+        mgh_vox2ras(&mgh.header, nx, ny, nz)
+    } else {
+        na::Matrix4::identity()
+    };
+
+    let mut label_names = HashMap::new();
+    label_names.insert(1u8, "Skull".to_string());
+    label_names.insert(2u8, "CSF".to_string());
+    label_names.insert(3u8, "Grey Matter".to_string());
+    label_names.insert(4u8, "White Matter".to_string());
+
+    println!("[voxel] Loaded {}×{}×{} label volume", nx, ny, nz);
+
+    Ok(VoxelVolume {
+        name: "head_labels".to_string(),
+        dims: [nx, ny, nz],
+        vox2ras,
+        labels,
+        label_names,
     })
 }
