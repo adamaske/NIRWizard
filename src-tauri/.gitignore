@@ -2,3 +2,5 @@
 # will have compiled files and executables
 /target/
 /gen/schemas
+# HDF5 redistributable DLLs — copy from HDF_Group/HDF5/1.14.6/bin before building
+#/dlls/*.dll
