@@ -119,14 +119,13 @@ fn read_i32(ds: &hdf5::Dataset) -> Result<i32, String> {
 // =============================================================================
 // Public entry point
 // =============================================================================
-
 pub fn parse_snirf(path: &str) -> Result<SNIRF, String> {
     let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
 
-    #[cfg(debug_assertions)]
-    print_hdf5_tree(path, &file);
-
-    let format_version = file
+    //#[cfg(debug_assertions)]
+    //print_hdf5_tree(path, &file);
+    //
+    let _format_version = file
         .dataset("formatVersion")
         .map_err(|e| format!("Failed to read formatVersion: {}", e))
         .and_then(|ds| read_string(&ds))?;
@@ -161,11 +160,15 @@ pub fn parse_snirf(path: &str) -> Result<SNIRF, String> {
         return Err("No /nirs group found in file".to_string());
     }
 
-    Ok(SNIRF {
-        format_version,
+    let snirf = SNIRF {
+        format_version: _format_version,
         file_descriptor,
         nirs_entries,
-    })
+    };
+
+    println!("Parsed SNIRF: {}", snirf);
+
+    Ok(snirf)
 }
 
 // =============================================================================
@@ -529,7 +532,11 @@ fn parse_events(nirs: &Group) -> Result<Vec<Event>, String> {
                 .rows()
                 .into_iter()
                 .filter(|row| row.len() >= 3)
-                .map(|row| EventMarker { onset: row[0], duration: row[1], value: row[2] })
+                .map(|row| EventMarker {
+                    onset: row[0],
+                    duration: row[1],
+                    value: row[2],
+                })
                 .collect();
 
             markers.sort_unstable_by(|a, b| a.onset.partial_cmp(&b.onset).unwrap());
@@ -553,7 +560,9 @@ fn parse_auxiliaries(nirs: &Group) -> Result<Vec<AuxiliaryData>, String> {
             let unit = aux
                 .dataset("dataUnit")
                 .map_err(|e| format!("aux{i}/dataUnit: {e}"))
-                .and_then(|ds| read_string(&ds).map_err(|e| format!("aux{i}/dataUnit parse: {e}")))?;
+                .and_then(|ds| {
+                    read_string(&ds).map_err(|e| format!("aux{i}/dataUnit parse: {e}"))
+                })?;
 
             let data: Vec<f64> = aux
                 .dataset("dataTimeSeries")
@@ -572,7 +581,13 @@ fn parse_auxiliaries(nirs: &Group) -> Result<Vec<AuxiliaryData>, String> {
                 .ok()
                 .and_then(|ds| ds.read_scalar::<f64>().ok());
 
-            Ok(AuxiliaryData { name, unit, data, time, time_offset })
+            Ok(AuxiliaryData {
+                name,
+                unit,
+                data,
+                time,
+                time_offset,
+            })
         })
         .collect()
 }

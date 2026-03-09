@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+use crate::domain::nirs_view::NirsView;
 use crate::domain::snirf::SNIRF;
 
 #[derive(Serialize, Clone)]
@@ -7,43 +8,50 @@ pub struct EventSummary {
     pub name: String,
     pub marker_count: usize,
 }
+#[derive(Serialize, Clone)]
+pub struct WavelengthInfo {
+    pub wavelengths_nm: Vec<f64>,
+}
 
 #[derive(Serialize, Clone)]
 pub struct SnirfSummary {
     pub filename: String,
+    pub format_version: String,
+    pub data_kind: String, // "raw_cw" | "processed_hemoglobin" | "empty"
     pub channels: usize,
     pub sources: usize,
     pub detectors: usize,
     pub timepoints: usize,
     pub sampling_rate: f64,
     pub duration: f64,
-    pub hbo_wavelength: usize,
-    pub hbr_wavelength: usize,
+    pub wavelengths: Vec<f64>,
     pub events: Vec<EventSummary>,
     pub aux_count: usize,
 }
 
 impl SnirfSummary {
     pub fn from_snirf(snirf: &SNIRF) -> Self {
-        let time = &snirf.nirs_entries[0].data_blocks[0].time;
-        let sampling_rate = if time.len() >= 2 {
-            1.0 / (time[1] - time[0])
-        } else {
-            0.0
+        let entry = &snirf.nirs_entries[0];
+        let view = NirsView::new(entry);
+
+        let data_kind = match view.data_kind() {
+            crate::domain::nirs_view::DataKind::RawCW => "raw_cw",
+            crate::domain::nirs_view::DataKind::ProcessedHemoglobin => "processed hemoglobin",
+            crate::domain::nirs_view::DataKind::Empty => "empty",
         };
 
         SnirfSummary {
             filename: snirf.file_descriptor.filename.clone(),
-            channels: snirf.channels.channels.len(),
-            sources: snirf.nirs_entries[0].probe.sources.len(),
-            detectors: snirf.nirs_entries[0].probe.detectors.len(),
-            timepoints: time.len(),
-            sampling_rate,
-            duration: time.last().copied().unwrap_or(0.0),
-            hbo_wavelength: snirf.wavelengths.hbo_wl,
-            hbr_wavelength: snirf.wavelengths.hbr_wl,
-            events: snirf
-                .events
+            format_version: snirf.format_version.clone(),
+            data_kind: data_kind.to_string(),
+            channels: view.channel_count(),
+            sources: entry.probe.sources.len(),
+            detectors: entry.probe.detectors.len(),
+            timepoints: view.timepoints(),
+            sampling_rate: view.sampling_rate(),
+            duration: view.duration(),
+            wavelengths: entry.probe.wavelengths.clone(),
+            events: entry
                 .events
                 .iter()
                 .map(|e| EventSummary {
@@ -51,7 +59,7 @@ impl SnirfSummary {
                     marker_count: e.markers.len(),
                 })
                 .collect(),
-            aux_count: snirf.biosignals.auxilaries.len(),
+            aux_count: entry.auxiliaries.len(),
         }
     }
 }

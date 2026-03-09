@@ -1,12 +1,12 @@
 use serde::Serialize;
 use tauri::{Emitter, State};
 
+use crate::domain::nirs_view::NirsView;
 use crate::state::AppState;
 
 // =============================================================================
 // Response types
 // =============================================================================
-
 #[derive(Serialize)]
 pub struct OptodePosition {
     pub id: usize,
@@ -40,8 +40,13 @@ pub struct ProbeLayout {
 pub fn get_probe_layout(state: State<AppState>) -> Option<ProbeLayout> {
     let session = state.session.read().ok()?;
     let snirf = session.snirf.as_ref()?;
+    let entry = snirf.nirs_entries.first()?;
+    let view = NirsView::new(entry);
 
-    let sources = snirf.nirs_entries[0]
+    let n_sources = entry.probe.sources.len();
+    let n_detectors = entry.probe.detectors.len();
+
+    let sources = entry
         .probe
         .sources
         .iter()
@@ -53,7 +58,7 @@ pub fn get_probe_layout(state: State<AppState>) -> Option<ProbeLayout> {
         })
         .collect();
 
-    let detectors = snirf.nirs_entries[0]
+    let detectors = entry
         .probe
         .detectors
         .iter()
@@ -65,20 +70,12 @@ pub fn get_probe_layout(state: State<AppState>) -> Option<ProbeLayout> {
         })
         .collect();
 
-    let n_sources = snirf.nirs_entries[0].probe.sources.len();
-    let n_detectors = snirf.nirs_entries[0].probe.detectors.len();
-
-    // SNIRF measurementList uses 1-based source/detector indices; convert to
-    // 0-based for array indexing on the frontend.
-    //
-    // TODO : Get the channel data
-    let channels = snirf
-        .channels
-        .channels
+    let channels = view
+        .channels_block0()
         .iter()
         .filter_map(|ch| {
-            let src_idx = ch.source_id.checked_sub(1)?;
-            let det_idx = ch.detector_id.checked_sub(1)?;
+            let src_idx = ch.source_idx_0based()?;
+            let det_idx = ch.detector_idx_0based()?;
             if src_idx >= n_sources || det_idx >= n_detectors {
                 return None;
             }
@@ -103,8 +100,6 @@ pub struct ChannelsSelectedPayload {
     pub channel_ids: Vec<usize>,
 }
 
-/// Called by ChannelSelector whenever the selection changes.
-/// Stores the selection in session state and emits a `channels-selected` event.
 #[tauri::command]
 pub fn set_selected_channels(
     channel_ids: Vec<usize>,
@@ -113,16 +108,21 @@ pub fn set_selected_channels(
 ) {
     #[cfg(debug_assertions)]
     {
-        let total = state
+        let count = state
             .session
             .read()
             .ok()
-            .and_then(|s| s.snirf.as_ref().map(|snirf| snirf.channels.channels.len()))
+            .and_then(|s| {
+                let snirf = s.snirf.as_ref()?;
+                let entry = snirf.nirs_entries.first()?;
+                let view = NirsView::new(entry);
+                Some(view.channel_count())
+            })
             .unwrap_or(0);
         println!(
             "[ChannelSelector] {}/{} selected: {:?}",
             channel_ids.len(),
-            total,
+            count,
             channel_ids
         );
     }

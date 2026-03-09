@@ -41,8 +41,8 @@
   const DOWNSAMPLE_TARGET = 2000; // max points per series sent to ECharts
 
   // Mirror CSS vars — ECharts config needs raw hex strings
-  const HBO_COLOR = "#ff2255"; // --color-hbo
-  const HBR_COLOR = "#2266ff"; // --color-hbr
+  const HBO_COLOR = "#2266ff"; // --color-hbo
+  const HBR_COLOR = "#ff2255"; // --color-hbr
   const CHART_BG = "#0a0a10"; // --chart-bg
   const CHART_AXIS = "#333340"; // --chart-axis
   const CHART_GRID = "#161620"; // --chart-grid
@@ -321,14 +321,14 @@
     const markAreas = buildMarkAreas(0);
 
     channels.forEach((ch, idx) => {
-      const hboName = `${ch.name} HbO`;
-      const hbrName = `${ch.name} HbR`;
+      const hboName = `${ch.name} ${ch.series_a_label}`;
+      const hbrName = `${ch.name} ${ch.series_b_label}`;
       legendData.push(hboName, hbrName);
 
       const hboSeries = {
         ...PERF_SERIES,
         name: hboName,
-        data: downsample(time, ch.hbo),
+        data: downsample(time, ch.series_a),
         lineStyle: { color: HBO_COLOR, width: 1.5 },
         itemStyle: { color: HBO_COLOR },
       };
@@ -349,7 +349,7 @@
       series.push({
         ...PERF_SERIES,
         name: hbrName,
-        data: downsample(time, ch.hbr),
+        data: downsample(time, ch.series_b),
         lineStyle: { color: HBR_COLOR, width: 1.5, type: "dotted" },
         itemStyle: { color: HBR_COLOR },
       });
@@ -475,7 +475,7 @@
       const hboSeries = {
         ...PERF_SERIES,
         name: `${ch.name} HbO`,
-        data: downsample(time, ch.hbo),
+        data: downsample(time, ch.series_a),
         xAxisIndex: i,
         yAxisIndex: i,
         lineStyle: { color: HBO_COLOR, width: 1.5 },
@@ -490,7 +490,7 @@
       series.push({
         ...PERF_SERIES,
         name: `${ch.name} HbR`,
-        data: downsample(time, ch.hbr),
+        data: downsample(time, ch.series_b),
         xAxisIndex: i,
         yAxisIndex: i,
         lineStyle: { color: HBR_COLOR, width: 1.5, type: "dotted" },
