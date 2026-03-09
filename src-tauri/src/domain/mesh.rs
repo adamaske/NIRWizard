@@ -73,8 +73,11 @@ pub struct Mesh {
 // Helper: build KD-tree from vertex positions
 // =========================
 
-pub fn build_kdtree(vertices: &[Vector3<f64>]) -> kiddo::float::kdtree::KdTree<f64, u64, 3, 512, u32> {
-    let mut tree: kiddo::float::kdtree::KdTree<f64, u64, 3, 512, u32> = kiddo::float::kdtree::KdTree::new();
+pub fn build_kdtree(
+    vertices: &[Vector3<f64>],
+) -> kiddo::float::kdtree::KdTree<f64, u64, 3, 512, u32> {
+    let mut tree: kiddo::float::kdtree::KdTree<f64, u64, 3, 512, u32> =
+        kiddo::float::kdtree::KdTree::new();
     for (i, v) in vertices.iter().enumerate() {
         tree.add(&[v.x, v.y, v.z], i as u64);
     }

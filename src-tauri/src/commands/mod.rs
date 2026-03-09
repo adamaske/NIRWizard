@@ -1,4 +1,3 @@
-pub mod pipeline;
 pub mod probe;
 pub mod scene;
 mod summary;

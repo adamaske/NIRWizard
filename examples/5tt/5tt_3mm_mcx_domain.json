@@ -1,0 +1,51 @@
+{
+  "_comment": "MCX Domain section for 5TT volume at 3.0mm resolution. Adjust optical properties for your wavelength. Add Session, Optode, and Forward sections for a complete input file.",
+  "Domain": {
+    "VolumeFile": "5tt_3mm.bin",
+    "Dim": [
+      28,
+      28,
+      28
+    ],
+    "VoxelSize": 3.0,
+    "BackgroundFlag": 0,
+    "Media": [
+      {
+        "mua": 0.0,
+        "mus": 0.0,
+        "g": 1.0,
+        "n": 1.0
+      },
+      {
+        "mua": 0.019,
+        "mus": 7.8,
+        "g": 0.89,
+        "n": 1.37
+      },
+      {
+        "mua": 0.02,
+        "mus": 9.0,
+        "g": 0.89,
+        "n": 1.37
+      },
+      {
+        "mua": 0.004,
+        "mus": 0.09,
+        "g": 0.89,
+        "n": 1.37
+      },
+      {
+        "mua": 0.013,
+        "mus": 8.6,
+        "g": 0.89,
+        "n": 1.37
+      },
+      {
+        "mua": 0.017,
+        "mus": 7.5,
+        "g": 0.89,
+        "n": 1.37
+      }
+    ]
+  }
+}

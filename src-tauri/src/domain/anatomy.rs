@@ -13,3 +13,21 @@ pub struct SubjectAnatomy {
     #[serde(skip)]
     pub labels_mgz_path: Option<std::path::PathBuf>,
 }
+
+// Voxelizaed Head Anatomy: 5 tissues
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VoxelAnatomy {
+    pub skull: Option<VoxelVolume>,
+    pub csf: Option<VoxelVolume>,
+    pub grey_matter: Option<VoxelVolume>,
+    pub white_matter: Option<VoxelVolume>,
+    pub scalp: Option<VoxelVolume>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VoxelVolume {
+    pub dimensions: (usize, usize, usize),
+    pub voxel_size_mm: (f32, f32, f32),
+    pub data: Vec<u8>,
+    pub xd: String,
+}

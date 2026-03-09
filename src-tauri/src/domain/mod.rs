@@ -1,7 +1,6 @@
 pub mod snirf;
 pub use snirf::*;
 pub mod mesh;
-pub mod pipeline;
 pub use mesh::{Mesh, MeshGeometry, MeshTopology, Vertex};
 pub mod scene;
 pub use scene::{ObjectMeta, SceneObject, Transform};
