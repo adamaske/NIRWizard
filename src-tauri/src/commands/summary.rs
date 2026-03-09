@@ -25,7 +25,7 @@ pub struct SnirfSummary {
 
 impl SnirfSummary {
     pub fn from_snirf(snirf: &SNIRF) -> Self {
-        let time = &snirf.channels.time;
+        let time = &snirf.nirs_entries[0].data_blocks[0].time;
         let sampling_rate = if time.len() >= 2 {
             1.0 / (time[1] - time[0])
         } else {
@@ -33,10 +33,10 @@ impl SnirfSummary {
         };
 
         SnirfSummary {
-            filename: snirf.fd.name.clone(),
+            filename: snirf.file_descriptor.filename.clone(),
             channels: snirf.channels.channels.len(),
-            sources: snirf.probe.sources.len(),
-            detectors: snirf.probe.detectors.len(),
+            sources: snirf.nirs_entries[0].probe.sources.len(),
+            detectors: snirf.nirs_entries[0].probe.detectors.len(),
             timepoints: time.len(),
             sampling_rate,
             duration: time.last().copied().unwrap_or(0.0),

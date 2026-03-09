@@ -1,4 +1,6 @@
-use crate::state::AppState;
+use std::iter::empty;
+
+use crate::{domain::probe::Channel, state::AppState};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Debug)]
@@ -35,25 +37,13 @@ pub fn get_timeseries_data(state: tauri::State<AppState>) -> Option<TimeseriesPa
     let session = state.session.read().ok()?;
     let snirf = session.snirf.as_ref()?; // Get is a reference
 
-    // The payload-time and snirf-time is equal so we can copy it.
-    let time = snirf.channels.time.clone();
-    // Iterate over each channel,
-    // create a ChannelPayload,
-    // and colelct into channels vec
-    let channels = snirf
-        .channels
-        .channels
-        .iter()
-        .map(|ch| ChannelPayload {
-            id: ch.id,
-            name: ch.name.clone(),
-            hbo: ch.hbo.clone(),
-            hbr: ch.hbr.clone(),
-        })
-        .collect();
+    // The time axis is shared across all channels in the block; clone it once.
+    let time = snirf.nirs_entries[0].data_blocks[0].time.clone();
 
-    let events = snirf
-        .events
+    // TODO : ChannelData View
+    let channels: Vec<ChannelPayload> = empty();
+
+    let events = snirf.nirs_entries[0]
         .events
         .iter()
         .map(|ev| EventPayload {
@@ -70,7 +60,11 @@ pub fn get_timeseries_data(state: tauri::State<AppState>) -> Option<TimeseriesPa
         })
         .collect();
 
-    Some(TimeseriesPayload { time, channels, events })
+    Some(TimeseriesPayload {
+        time,
+        channels,
+        events,
+    })
 }
 
 #[tauri::command]

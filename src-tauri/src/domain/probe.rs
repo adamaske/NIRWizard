@@ -3,6 +3,35 @@ use crate::domain::snirf::SNIRF;
 use nalgebra::Vector3;
 use serde::Serialize;
 
+pub struct Channel {
+    pub id: usize,
+    pub name: String,
+    pub source_index: usize,
+    pub detector_index: usize,
+}
+
+pub fn create_channels_from_snirf(snirf: &SNIRF) -> Result<Vec<Channel>, String> {
+    let data_block = snirf
+        .nirs_entries
+        .first()
+        .and_then(|e| e.data_blocks.first())
+        .ok_or("No data block found")?;
+
+    let channels = data_block
+        .unique_channel_pairs()
+        .into_iter()
+        .enumerate()
+        .map(|(id, (source_index, detector_index))| Channel {
+            id,
+            name: format!("S{source_index}_D{detector_index}"),
+            source_index,
+            detector_index,
+        })
+        .collect();
+
+    Ok(channels)
+}
+
 /// A single optode (source or detector) with its 3D position.
 #[derive(Debug, Clone, Serialize)]
 pub struct Optode3D {
@@ -50,7 +79,7 @@ pub struct OptodeLayout {
 
 impl OptodeLayout {
     pub fn from_snirf(snirf: &SNIRF) -> Self {
-        let sources: Vec<Optode3D> = snirf
+        let sources: Vec<Optode3D> = snirf.nirs_entries[0]
             .probe
             .sources
             .iter()
@@ -61,7 +90,7 @@ impl OptodeLayout {
             })
             .collect();
 
-        let detectors: Vec<Optode3D> = snirf
+        let detectors: Vec<Optode3D> = snirf.nirs_entries[0]
             .probe
             .detectors
             .iter()
@@ -75,13 +104,12 @@ impl OptodeLayout {
         let n_sources = sources.len();
         let n_detectors = detectors.len();
 
-        let channels: Vec<ChannelConnection> = snirf
-            .channels
-            .channels
-            .iter()
+        let channels: Vec<ChannelConnection> = create_channels_from_snirf(snirf)
+            .unwrap_or_default()
+            .into_iter()
             .filter_map(|ch| {
-                let src_idx = ch.source_id.checked_sub(1)?;
-                let det_idx = ch.detector_id.checked_sub(1)?;
+                let src_idx = ch.source_index.checked_sub(1)?;
+                let det_idx = ch.detector_index.checked_sub(1)?;
                 if src_idx >= n_sources || det_idx >= n_detectors {
                     return None;
                 }

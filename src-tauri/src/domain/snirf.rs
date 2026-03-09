@@ -1,116 +1,110 @@
 use nalgebra::{Vector2, Vector3};
-use serde::Serialize;
 
-#[derive(Serialize, Debug)]
 pub struct SNIRF {
-    pub fd: FileDescriptor,
-    pub metadata: Metadata,
-    pub wavelengths: Wavelengths,
-    pub channels: ChannelData,
-    pub probe: Probe,
-    pub events: Events,
-    pub biosignals: BiosignalData,
-}
-
-impl std::fmt::Display for SNIRF {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "SNIRF File:  {}", self.fd.name)?;
-        writeln!(f, "  Path:      {}", self.fd.path)?;
-        writeln!(f, "  Metadata ({}):", self.metadata.tags.len())?;
-        self.metadata
-            .tags
-            .iter()
-            .try_for_each(|t| writeln!(f, "    {:<24} {}", t.name, t.value))?;
-        writeln!(
-            f,
-            "  Channels:  {}  ({} sources, {} detectors)",
-            self.channels.channels.len(),
-            self.probe.sources.len(),
-            self.probe.detectors.len()
-        )?;
-        writeln!(f, "  Timepoints:{}", self.channels.time.len())?;
-        writeln!(
-            f,
-            "  Wavelengths: HbO {} nm  HbR {} nm",
-            self.wavelengths.hbo_wl, self.wavelengths.hbr_wl
-        )?;
-        writeln!(f, "  Events ({}):", self.events.events.len())?;
-        self.events
-            .events
-            .iter()
-            .try_for_each(|e| writeln!(f, "    {:<24} {} markers", e.name, e.markers.len()))?;
-        write!(f, "  Aux:       {}", self.biosignals.auxilaries.len())
-    }
+    pub format_version: String,
+    pub file_descriptor: FileDescriptor,
+    pub nirs_entries: Vec<NirsEntry>,
 }
 
 // =========================
 // File Descriptor
 // =========================
-#[derive(Serialize, Debug)]
 pub struct FileDescriptor {
-    pub path: String,
-    pub name: String,
+    pub filepath: String,
+    pub filename: String,
+}
+
+// =========================
+// NIRS
+// =========================
+pub struct NirsEntry {
+    pub metadata: Vec<MetadataTag>,
+    pub data_blocks: Vec<DataBlock>,
+    pub probe: Probe,
+    pub events: Vec<Event>,
+    pub auxiliaries: Vec<AuxiliaryData>,
 }
 
 // =========================
 // Metadata
 // =========================
-#[derive(Serialize, Debug)]
 pub struct MetadataTag {
     pub name: String,
     pub value: String,
 }
 
-#[derive(Serialize, Debug)]
-pub struct Metadata {
-    // Placeholder for actual metadata fields
-    // e.g., subject_id, session_id, etc.
-    pub tags: Vec<MetadataTag>,
+// =========================
+// Data
+// =========================
+pub struct Measurement {
+    pub source_index: usize,
+    pub detector_index: usize,
+    pub wavelength_index: usize,
+
+    pub data_type: i32,          // 1 = CW, 99999=processed
+    pub data_type_label: String, // i.e "HbO", "HbR", "OD Hbo"
+    pub data_type_index: i32,
+    pub data_unit: Option<String>,
+    pub data: Vec<f64>,
+
+    // OPTIONAL FIELDS
+    pub wavelength_actual: Option<f64>,
+    pub source_power: Option<f64>,
+    pub detector_gain: Option<f64>,
+    pub module_index: Option<f64>,
 }
 
-// =========================
-// Time Series Data
-// =========================
-#[derive(Serialize, Debug)]
-pub struct TimeSeriesData {
-    pub time: Vec<f64>,      // Time vector
-    pub data: Vec<Vec<f64>>, // Channels x timepoints
-}
-
-// =========================
-// Wavelengths
-// =========================
-#[derive(Serialize, Debug)]
-pub struct Wavelengths {
-    pub hbo_wl: usize,
-    pub hbr_wl: usize,
-}
-
-#[derive(Serialize, Debug)]
-pub struct Channel {
-    // What does a channel have?
-    // We have channel index i.e 0, 1, 2...
-    // We have channel name i.e S1-D2, S1-D3
-    // We have source_id and detector_id
-    pub id: usize,
-    pub name: String,
-    pub source_id: usize,
-    pub detector_id: usize,
-    pub hbo: Vec<f64>,
-    pub hbr: Vec<f64>,
-}
-
-#[derive(Serialize, Debug)]
-pub struct ChannelData {
+pub struct DataBlock {
     pub time: Vec<f64>,
-    pub channels: Vec<Channel>,
+    pub measurements: Vec<Measurement>,
+}
+
+impl DataBlock {
+    /// Returns one `(source_index, detector_index)` pair per unique fNIRS channel,
+    /// in the order they first appear in the measurement list.
+    ///
+    /// In SNIRF a "channel" is a physical source–detector pair.  Each pair typically
+    /// has one measurement entry per wavelength, so the raw `measurements` vec
+    /// contains duplicates.  This method strips those duplicates out.
+    pub fn unique_channel_pairs(&self) -> Vec<(usize, usize)> {
+        // `HashSet::insert` returns `true` the first time a value is inserted
+        // and `false` if it was already present — perfect for dedup-in-place.
+        let mut seen = std::collections::HashSet::new();
+
+        self.measurements
+            .iter()
+            // Keep only the first occurrence of each (source, detector) pair.
+            // The closure takes `&&Measurement` because `.iter()` yields `&Measurement`
+            // and `.filter()` wraps that in another `&`, so we shadow with `m` for clarity.
+            .filter(|m| seen.insert((m.source_index, m.detector_index)))
+            .map(|m| (m.source_index, m.detector_index))
+            .collect()
+    }
 }
 
 // =========================
-// Probe & Optode Layout
+// Probe
 // =========================
+pub struct Probe {
+    pub wavelengths: Vec<f64>,
+    pub wavelength_emission: Option<Vec<f64>>,
+    //
+    pub sources: Vec<Optode>,
+    pub detectors: Vec<Optode>,
+    // Coordinates & Landmarks
+    pub landmarks: Option<Vec<Landmark>>,
+    pub coordinate_system: Option<String>,
+    pub coordinate_system_description: Option<String>,
+    pub use_local_index: Option<i32>,
+    // TODO : FD, TD, DCS fields
+}
 
-#[derive(Serialize, Debug)]
+pub struct Landmark {
+    pub label: String,
+    pub pos_2d: Option<[f64; 2]>,
+    pub pos_3d: Option<[f64; 3]>,
+}
+
 pub struct Optode {
     pub name: String,
     pub id: usize,
@@ -118,46 +112,27 @@ pub struct Optode {
     pub pos_2d: Vector2<f64>,
 }
 
-// EXAMPLE But we need more robust abstraction and implemetnation
-#[derive(Serialize, Debug)]
-pub struct Probe {
-    pub sources: Vec<Optode>,   // 3D coordinates of sources
-    pub detectors: Vec<Optode>, // 3D coordinates of detectors
-}
-
 // =========================
 // Events / Markers / Triggers
 // =========================
-#[derive(Serialize, Debug)]
 pub struct EventMarker {
     pub onset: f64,    // seconds
     pub duration: f64, // seconds
     pub value: f64,
 }
 
-#[derive(Serialize, Debug)]
 pub struct Event {
     pub name: String,
     pub markers: Vec<EventMarker>,
 }
 
-#[derive(Serialize, Debug)]
-pub struct Events {
-    pub events: Vec<Event>,
-}
-
 // =========================
-// Biosignal / Auxiliary Data
+// Auxiliary Data
 // =========================
-#[derive(Serialize, Debug)]
-pub struct BiosignalData {
-    pub auxilaries: Vec<AuxiliaryData>,
-}
-
-#[derive(Serialize, Debug)]
 pub struct AuxiliaryData {
     pub name: String,
     pub unit: String,
     pub data: Vec<f64>,
     pub time: Vec<f64>,
+    pub time_offset: Option<f64>,
 }

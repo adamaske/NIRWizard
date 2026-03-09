@@ -41,7 +41,7 @@ pub fn get_probe_layout(state: State<AppState>) -> Option<ProbeLayout> {
     let session = state.session.read().ok()?;
     let snirf = session.snirf.as_ref()?;
 
-    let sources = snirf
+    let sources = snirf.nirs_entries[0]
         .probe
         .sources
         .iter()
@@ -53,7 +53,7 @@ pub fn get_probe_layout(state: State<AppState>) -> Option<ProbeLayout> {
         })
         .collect();
 
-    let detectors = snirf
+    let detectors = snirf.nirs_entries[0]
         .probe
         .detectors
         .iter()
@@ -65,11 +65,13 @@ pub fn get_probe_layout(state: State<AppState>) -> Option<ProbeLayout> {
         })
         .collect();
 
-    let n_sources = snirf.probe.sources.len();
-    let n_detectors = snirf.probe.detectors.len();
+    let n_sources = snirf.nirs_entries[0].probe.sources.len();
+    let n_detectors = snirf.nirs_entries[0].probe.detectors.len();
 
     // SNIRF measurementList uses 1-based source/detector indices; convert to
     // 0-based for array indexing on the frontend.
+    //
+    // TODO : Get the channel data
     let channels = snirf
         .channels
         .channels
@@ -129,8 +131,5 @@ pub fn set_selected_channels(
         session.selected_channels = channel_ids.clone();
     }
 
-    let _ = app.emit(
-        "channels-selected",
-        ChannelsSelectedPayload { channel_ids },
-    );
+    let _ = app.emit("channels-selected", ChannelsSelectedPayload { channel_ids });
 }

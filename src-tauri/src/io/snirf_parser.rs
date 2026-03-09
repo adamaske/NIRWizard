@@ -1,10 +1,10 @@
 use crate::domain::*;
+use hdf5::{File, Group};
 use nalgebra::{Vector2, Vector3};
-use hdf5::File;
 use ndarray::Array2;
 
 // =============================================================================
-// HDF5 tree inspector (debug builds only — prints to terminal on `tauri dev`)
+// HDF5 tree inspector (debug builds only)
 // =============================================================================
 
 #[cfg(debug_assertions)]
@@ -27,12 +27,9 @@ fn dtype_label(ds: &hdf5::Dataset) -> String {
         .unwrap_or_else(|| "?".into())
 }
 
-/// For scalar (single-element) datasets, tries to read and return a preview
-/// string like ` = "PPG"` or ` = 830`. Returns empty string for arrays.
 #[cfg(debug_assertions)]
 fn scalar_preview(ds: &hdf5::Dataset) -> String {
     let n: usize = ds.shape().iter().product();
-    // shape() returns [] for 0-d scalars (product = 1) and [k] for 1-d
     let is_scalar = ds.ndim() == 0 || (ds.ndim() == 1 && n == 1);
     if !is_scalar {
         return String::new();
@@ -83,20 +80,17 @@ fn print_hdf5_tree(path: &str, file: &File) {
 }
 
 // =============================================================================
-// String helper — SNIRF files use either VarLenUnicode or VarLenAscii
+// String / integer helpers
 // =============================================================================
 
-/// Read a string dataset regardless of encoding (Unicode/ASCII) or shape (0-d scalar or [1] array).
+/// Read a string dataset regardless of encoding or shape.
 fn read_string(ds: &hdf5::Dataset) -> Result<String, String> {
-    // 0-d VarLenUnicode
     if let Ok(s) = ds.read_scalar::<hdf5::types::VarLenUnicode>() {
         return Ok(s.to_string());
     }
-    // 0-d VarLenAscii
     if let Ok(s) = ds.read_scalar::<hdf5::types::VarLenAscii>() {
         return Ok(s.to_string());
     }
-    // [1] VarLenAscii (SATORI style)
     if let Some(s) = ds
         .read_raw::<hdf5::types::VarLenAscii>()
         .ok()
@@ -104,7 +98,6 @@ fn read_string(ds: &hdf5::Dataset) -> Result<String, String> {
     {
         return Ok(s.to_string());
     }
-    // [1] VarLenUnicode
     if let Some(s) = ds
         .read_raw::<hdf5::types::VarLenUnicode>()
         .ok()
@@ -115,7 +108,7 @@ fn read_string(ds: &hdf5::Dataset) -> Result<String, String> {
     Err("no readable string encoding found".to_string())
 }
 
-/// Read an i32 dataset regardless of shape (0-d scalar or [1] array).
+/// Read an i32 dataset regardless of shape.
 fn read_i32(ds: &hdf5::Dataset) -> Result<i32, String> {
     ds.read_scalar::<i32>()
         .ok()
@@ -124,330 +117,462 @@ fn read_i32(ds: &hdf5::Dataset) -> Result<i32, String> {
 }
 
 // =============================================================================
-// Public parser entry
+// Public entry point
 // =============================================================================
 
 pub fn parse_snirf(path: &str) -> Result<SNIRF, String> {
-    let _file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+    let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
 
-    //#[cfg(debug_assertions)]
-    //print_hdf5_tree(path, &_file);
+    #[cfg(debug_assertions)]
+    print_hdf5_tree(path, &file);
 
-    let _fd = FileDescriptor {
-        path: path.to_string(),
-        name: std::path::Path::new(path)
+    let format_version = file
+        .dataset("formatVersion")
+        .map_err(|e| format!("Failed to read formatVersion: {}", e))
+        .and_then(|ds| read_string(&ds))?;
+
+    let file_descriptor = FileDescriptor {
+        filepath: path.to_string(),
+        filename: std::path::Path::new(path)
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("unknown")
             .to_string(),
     };
 
-    let _metadata: Metadata = parse_metadata(&_file)?;
-    let _auxilires: BiosignalData = parse_biosignals(&_file)?;
-    let _wavelengths: Wavelengths = parse_wavelenghts(&_file)?;
-    let _probe = parse_probe(&_file)?;
-    let _channels = parse_measurement_list(&_file)?;
-    let _events = parse_events(&_file)?;
-
-    let snirf: SNIRF = SNIRF {
-        fd: _fd,
-        metadata: _metadata,
-        wavelengths: _wavelengths,
-        channels: _channels,
-        probe: _probe,
-        events: _events,
-        biosignals: _auxilires,
-    };
-
-    println!("Parsed SNIRF: {}", snirf);
-
-    Ok(snirf)
-}
-
-pub fn parse_timeseries_data(file: &File) -> Result<TimeSeriesData, String> {
-    let time_ds = file
-        .dataset("nirs/data1/time")
-        .map_err(|e| format!("Failed to read time: {}", e))?;
-
-    let time: Vec<f64> = time_ds
-        .read_raw()
-        .map_err(|e| format!("Failed to parse time: {}", e))?;
-
-    let data_ds = file
-        .dataset("/nirs/data1/dataTimeSeries")
-        .map_err(|e| format!("Failed to read data: {}", e))?;
-
-    let array: Array2<f64> = data_ds
-        .read_2d()
-        .map_err(|e| format!("Failed to parse data: {}", e))?;
-
-    // HDF5 layout is [timepoints, channels]; collect each column as a channel
-    let n_channels = array.ncols();
-    let data: Vec<Vec<f64>> = (0..n_channels)
-        .map(|ch| array.column(ch).to_vec())
-        .collect();
-
-    Ok(TimeSeriesData {
-        time,
-        data, // Placeholder, actual data parsing logic needed
-    })
-}
-
-pub fn parse_biosignals(file: &File) -> Result<BiosignalData, String> {
-    let nirs = file
-        .group("/nirs")
-        .map_err(|e| format!("Failed to open /nirs group: {}", e))?;
-
-    let mut auxilaries = Vec::new();
-    let mut i = 1usize;
-
-    loop {
-        let aux = match nirs.group(&format!("aux{}", i)) {
-            Ok(g) => g,
-            Err(_) => break,
-        };
-
-        let name = aux
-            .dataset("name")
-            .map_err(|e| format!("aux{}: failed to read name: {}", i, e))
-            .and_then(|ds| {
-                read_string(&ds).map_err(|e| format!("aux{}: failed to parse name: {}", i, e))
-            })?;
-
-        let unit = aux
-            .dataset("dataUnit")
-            .map_err(|e| format!("aux{}: failed to read dataUnit: {}", i, e))
-            .and_then(|ds| {
-                read_string(&ds).map_err(|e| format!("aux{}: failed to parse dataUnit: {}", i, e))
-            })?;
-
-        let data: Vec<f64> = aux
-            .dataset("dataTimeSeries")
-            .map_err(|e| format!("aux{}: failed to read dataTimeSeries: {}", i, e))?
-            .read_raw()
-            .map_err(|e| format!("aux{}: failed to parse dataTimeSeries: {}", i, e))?;
-
-        let time: Vec<f64> = aux
-            .dataset("time")
-            .map_err(|e| format!("aux{}: failed to read time: {}", i, e))?
-            .read_raw()
-            .map_err(|e| format!("aux{}: failed to parse time: {}", i, e))?;
-
-        auxilaries.push(AuxiliaryData {
-            name,
-            unit,
-            data,
-            time,
-        });
-        i += 1;
+    // SNIRF allows a single `/nirs` group or indexed `/nirs1`, `/nirs2`, …
+    let mut nirs_entries = Vec::new();
+    if let Ok(g) = file.group("nirs") {
+        nirs_entries.push(parse_nirs_entry(&g)?);
+    } else {
+        let mut i = 1usize;
+        loop {
+            match file.group(&format!("nirs{}", i)) {
+                Ok(g) => {
+                    nirs_entries.push(parse_nirs_entry(&g)?);
+                    i += 1;
+                }
+                Err(_) => break,
+            }
+        }
     }
 
-    Ok(BiosignalData { auxilaries })
-}
-
-pub fn parse_probe(file: &File) -> Result<Probe, String> {
-    // We have
-    let probe = file
-        .group("/nirs/probe")
-        .map_err(|e| format!("Failed to read probe: {}", e))?;
-
-    let d3d_array: Array2<f64> = probe
-        .dataset("detectorPos3D")
-        .map_err(|e| format!("Failed to read 3D detector positions: {}", e))?
-        .read_2d()
-        .map_err(|e| format!("Failed to parse 3D detector positions: {}", e))?;
-
-    let s3d_array: Array2<f64> = probe
-        .dataset("sourcePos3D")
-        .map_err(|e| format!("Failed to read 3D source positions: {}", e))?
-        .read_2d()
-        .map_err(|e| format!("Failed to parse 3D source positions: {}", e))?;
-
-    let n_detectors = d3d_array.nrows();
-    let n_sources = s3d_array.nrows();
-
-    // 2D positions are optional — fall back to x,y from 3D positions if absent
-    let d2d_array: Array2<f64> = probe
-        .dataset("detectorPos2D")
-        .and_then(|ds| ds.read_2d())
-        .unwrap_or_else(|_| d3d_array.slice(ndarray::s![.., 0..2]).to_owned());
-
-    let s2d_array: Array2<f64> = probe
-        .dataset("sourcePos2D")
-        .and_then(|ds| ds.read_2d())
-        .unwrap_or_else(|_| s3d_array.slice(ndarray::s![.., 0..2]).to_owned());
-
-    let row_to_vec2 = |arr: &Array2<f64>, i: usize| Vector2::new(arr[[i, 0]], arr[[i, 1]]);
-    let row_to_vec3 =
-        |arr: &Array2<f64>, i: usize| Vector3::new(arr[[i, 0]], arr[[i, 1]], arr[[i, 2]]);
-
-    let _sources: Vec<Optode> = (0..n_sources)
-        .map(|i| Optode {
-            name: format!("S{}", i + 1),
-            id: i,
-            pos_2d: row_to_vec2(&s2d_array, i),
-            pos_3d: row_to_vec3(&s3d_array, i),
-        })
-        .collect();
-
-    let _detectors: Vec<Optode> = (0..n_detectors)
-        .map(|i| Optode {
-            name: format!("D{}", i + 1),
-            id: i,
-            pos_2d: row_to_vec2(&d2d_array, i),
-            pos_3d: row_to_vec3(&d3d_array, i),
-        })
-        .collect();
-
-    Ok(Probe {
-        sources: _sources,     // Placeholder
-        detectors: _detectors, // Placeholder
-    })
-}
-
-pub fn parse_wavelenghts(file: &File) -> Result<Wavelengths, String> {
-    let probe = file
-        .group("/nirs/probe")
-        .map_err(|e| format!("Failed to read probe: {}", e))?;
-
-    let wl_ds = probe
-        .dataset("wavelengths")
-        .map_err(|e| format!("Failed to read wavelengths: {}", e))?;
-
-    let mut wl_array: Vec<f64> = wl_ds
-        .read_raw()
-        .map_err(|e| format!("Failed to parse wavelengths: {}", e))?;
-
-    if wl_array.len() < 2 {
-        return Err(format!(
-            "Expected at least 2 wavelengths, got {}",
-            wl_array.len()
-        ));
+    if nirs_entries.is_empty() {
+        return Err("No /nirs group found in file".to_string());
     }
 
-    // Sort descending: highest wavelength = HbO, lowest = HbR
-    wl_array.sort_unstable_by(|a, b| b.partial_cmp(a).unwrap());
-
-    Ok(Wavelengths {
-        hbo_wl: wl_array[0].round() as usize,
-        hbr_wl: wl_array[1].round() as usize,
+    Ok(SNIRF {
+        format_version,
+        file_descriptor,
+        nirs_entries,
     })
 }
 
-pub fn parse_measurement_list(file: &File) -> Result<ChannelData, String> {
-    let ts = parse_timeseries_data(file)?;
-    let half = ts.data.len() / 2;
-    let mut ts_data = ts.data;
+// =============================================================================
+// NIRS entry
+// =============================================================================
 
-    let data1 = file
-        .group("/nirs/data1")
-        .map_err(|e| format!("Failed to read data1 group: {}", e))?;
+fn parse_nirs_entry(nirs: &Group) -> Result<NirsEntry, String> {
+    let metadata = parse_metadata(nirs)?;
+    let data_blocks = parse_data_blocks(nirs)?;
+    let probe = parse_probe(nirs)?;
+    let events = parse_events(nirs)?;
+    let auxiliaries = parse_auxiliaries(nirs)?;
 
-    // The first half of dataTimeSeries columns are HbR (lower wavelength),
-    // the second half are HbO (higher wavelength).
-    // We read measurementList1..half to get source/detector IDs.
-    let channels = (0..half)
-        .map(|i| {
-            let ml = data1
-                .group(&format!("measurementList{}", i + 1))
-                .map_err(|e| format!("measurementList{}: failed to open: {}", i + 1, e))?;
-
-            let source_id = ml
-                .dataset("sourceIndex")
-                .map_err(|e| format!("measurementList{}: sourceIndex: {}", i + 1, e))
-                .and_then(|ds| {
-                    read_i32(&ds)
-                        .map_err(|e| format!("measurementList{}: sourceIndex: {}", i + 1, e))
-                })? as usize;
-
-            let detector_id = ml
-                .dataset("detectorIndex")
-                .map_err(|e| format!("measurementList{}: detectorIndex: {}", i + 1, e))
-                .and_then(|ds| {
-                    read_i32(&ds)
-                        .map_err(|e| format!("measurementList{}: detectorIndex: {}", i + 1, e))
-                })? as usize;
-
-            Ok(Channel {
-                id: i,
-                name: format!("S{}-D{}", source_id, detector_id),
-                source_id,
-                detector_id,
-                hbr: std::mem::take(&mut ts_data[i]),
-                hbo: std::mem::take(&mut ts_data[i + half]),
-            })
-        })
-        .collect::<Result<Vec<Channel>, String>>()?;
-
-    Ok(ChannelData {
-        time: ts.time,
-        channels,
+    Ok(NirsEntry {
+        metadata,
+        data_blocks,
+        probe,
+        events,
+        auxiliaries,
     })
 }
 
-pub fn parse_events(file: &File) -> Result<Events, String> {
-    let nirs = file
-        .group("/nirs")
-        .map_err(|e| format!("Failed to read nirs group: {}", e))?;
+// =============================================================================
+// Metadata  —  nirs/metaDataTags/*
+// =============================================================================
 
-    let mut events = Vec::new();
-    let mut i = 1usize;
-
-    loop {
-        let stim = match nirs.group(&format!("stim{}", i)) {
-            Ok(g) => g,
-            Err(_) => break,
-        };
-
-        let name = stim
-            .dataset("name")
-            .map_err(|e| format!("stim{}: failed to read name: {}", i, e))
-            .and_then(|ds| {
-                read_string(&ds).map_err(|e| format!("stim{}: failed to parse name: {}", i, e))
-            })?;
-
-        let data: Array2<f64> = stim
-            .dataset("data")
-            .map_err(|e| format!("stim{}: failed to read data: {}", i, e))?
-            .read_2d()
-            .map_err(|e| format!("stim{}: failed to parse data: {}", i, e))?;
-
-        let mut markers: Vec<EventMarker> = data
-            .rows()
-            .into_iter()
-            .filter(|row| row.len() >= 3)
-            .map(|row| EventMarker {
-                onset: row[0],
-                duration: row[1],
-                value: row[2],
-            })
-            .collect();
-
-        markers.sort_unstable_by(|a, b| a.onset.partial_cmp(&b.onset).unwrap());
-
-        events.push(Event { name, markers });
-        i += 1;
-    }
-
-    Ok(Events { events })
-}
-
-pub fn parse_metadata(file: &File) -> Result<Metadata, String> {
-    let group = file
-        .group("/nirs/metaDataTags")
-        .map_err(|e| format!("Failed to read metadata group: {}", e))?;
+fn parse_metadata(nirs: &Group) -> Result<Vec<MetadataTag>, String> {
+    let group = nirs
+        .group("metaDataTags")
+        .map_err(|e| format!("Failed to open metaDataTags: {}", e))?;
 
     let tags = group
         .member_names()
-        .map_err(|e| format!("Failed to list metadata members: {}", e))?
+        .map_err(|e| format!("Failed to list metaDataTags members: {}", e))?
         .into_iter()
         .filter_map(|name| {
-            // .ok()? skips this member if it isn't a dataset (e.g. a sub-group)
             let ds = group.dataset(&name).ok()?;
             let value = read_string(&ds).unwrap_or_else(|_| "(non-string)".to_string());
             Some(MetadataTag { name, value })
         })
         .collect();
 
-    Ok(Metadata { tags })
+    Ok(tags)
+}
+
+// =============================================================================
+// Probe  —  nirs/probe/*
+// =============================================================================
+
+/// Given optional 2D and 3D position arrays, return both — extrapolating the
+/// missing one.  At least one must be present, otherwise an error is returned.
+///
+///   3D-only  →  2D = columns (x, y)
+///   2D-only  →  3D = (x, y, z=0)
+///   both     →  returned as-is
+fn resolve_positions(
+    pos2d: Option<Array2<f64>>,
+    pos3d: Option<Array2<f64>>,
+    label: &str,
+) -> Result<(Array2<f64>, Array2<f64>), String> {
+    match (pos2d, pos3d) {
+        (Some(d2), Some(d3)) => Ok((d2, d3)),
+        (None, Some(d3)) => {
+            let d2 = d3.slice(ndarray::s![.., 0..2]).to_owned();
+            Ok((d2, d3))
+        }
+        (Some(d2), None) => {
+            let n = d2.nrows();
+            let mut d3 = Array2::<f64>::zeros((n, 3));
+            d3.slice_mut(ndarray::s![.., 0..2]).assign(&d2);
+            Ok((d2, d3))
+        }
+        (None, None) => Err(format!(
+            "probe: neither {}Pos2D nor {}Pos3D found",
+            label, label
+        )),
+    }
+}
+
+fn parse_probe(nirs: &Group) -> Result<Probe, String> {
+    let probe = nirs
+        .group("probe")
+        .map_err(|e| format!("Failed to open probe group: {}", e))?;
+
+    // Wavelengths (required)
+    let wavelengths: Vec<f64> = probe
+        .dataset("wavelengths")
+        .map_err(|e| format!("probe/wavelengths: {}", e))?
+        .read_raw()
+        .map_err(|e| format!("probe/wavelengths parse: {}", e))?;
+
+    let wavelength_emission: Option<Vec<f64>> = probe
+        .dataset("wavelengthEmission")
+        .and_then(|ds| ds.read_raw())
+        .ok();
+
+    // SNIRF spec: either *Pos2D or *Pos3D is sufficient — only one is required.
+    // Whichever is absent is extrapolated:
+    //   3D-only  →  2D = columns (x, y) of 3D array
+    //   2D-only  →  3D = (x, y, z=0)
+    let (s2d, s3d) = resolve_positions(
+        probe
+            .dataset("sourcePos2D")
+            .and_then(|ds| ds.read_2d())
+            .ok(),
+        probe
+            .dataset("sourcePos3D")
+            .and_then(|ds| ds.read_2d())
+            .ok(),
+        "source",
+    )?;
+
+    let (d2d, d3d) = resolve_positions(
+        probe
+            .dataset("detectorPos2D")
+            .and_then(|ds| ds.read_2d())
+            .ok(),
+        probe
+            .dataset("detectorPos3D")
+            .and_then(|ds| ds.read_2d())
+            .ok(),
+        "detector",
+    )?;
+
+    let row2 = |arr: &Array2<f64>, i: usize| Vector2::new(arr[[i, 0]], arr[[i, 1]]);
+    let row3 = |arr: &Array2<f64>, i: usize| Vector3::new(arr[[i, 0]], arr[[i, 1]], arr[[i, 2]]);
+
+    let sources: Vec<Optode> = (0..s3d.nrows())
+        .map(|i| Optode {
+            id: i,
+            name: format!("S{}", i + 1),
+            pos_2d: row2(&s2d, i),
+            pos_3d: row3(&s3d, i),
+        })
+        .collect();
+
+    let detectors: Vec<Optode> = (0..d3d.nrows())
+        .map(|i| Optode {
+            id: i,
+            name: format!("D{}", i + 1),
+            pos_2d: row2(&d2d, i),
+            pos_3d: row3(&d3d, i),
+        })
+        .collect();
+
+    // Optional fields
+    let coordinate_system = probe
+        .dataset("coordinateSystem")
+        .ok()
+        .and_then(|ds| read_string(&ds).ok());
+
+    let coordinate_system_description = probe
+        .dataset("coordinateSystemDescription")
+        .ok()
+        .and_then(|ds| read_string(&ds).ok());
+
+    let use_local_index = probe
+        .dataset("useLocalIndex")
+        .ok()
+        .and_then(|ds| read_i32(&ds).ok());
+
+    let landmarks = parse_landmarks(&probe).unwrap_or(None);
+
+    Ok(Probe {
+        wavelengths,
+        wavelength_emission,
+        sources,
+        detectors,
+        landmarks,
+        coordinate_system,
+        coordinate_system_description,
+        use_local_index,
+    })
+}
+
+fn parse_landmarks(probe: &Group) -> Result<Option<Vec<Landmark>>, String> {
+    let labels_ds = match probe.dataset("landmarkLabels") {
+        Ok(ds) => ds,
+        Err(_) => return Ok(None),
+    };
+
+    let labels: Vec<String> = labels_ds
+        .read_raw::<hdf5::types::VarLenUnicode>()
+        .map(|v| v.into_iter().map(|s| s.to_string()).collect())
+        .or_else(|_| {
+            labels_ds
+                .read_raw::<hdf5::types::VarLenAscii>()
+                .map(|v| v.into_iter().map(|s| s.to_string()).collect())
+        })
+        .map_err(|e| format!("probe/landmarkLabels parse: {}", e))?;
+
+    let pos2d: Option<Array2<f64>> = probe
+        .dataset("landmarkPos2D")
+        .and_then(|ds| ds.read_2d())
+        .ok();
+
+    let pos3d: Option<Array2<f64>> = probe
+        .dataset("landmarkPos3D")
+        .and_then(|ds| ds.read_2d())
+        .ok();
+
+    let landmarks = labels
+        .into_iter()
+        .enumerate()
+        .map(|(i, label)| Landmark {
+            label,
+            pos_2d: pos2d
+                .as_ref()
+                .and_then(|arr| (i < arr.nrows()).then(|| [arr[[i, 0]], arr[[i, 1]]])),
+            pos_3d: pos3d
+                .as_ref()
+                .and_then(|arr| (i < arr.nrows()).then(|| [arr[[i, 0]], arr[[i, 1]], arr[[i, 2]]])),
+        })
+        .collect();
+
+    Ok(Some(landmarks))
+}
+
+// =============================================================================
+// Data blocks  —  nirs/data{j}/*
+// =============================================================================
+
+fn parse_data_blocks(nirs: &Group) -> Result<Vec<DataBlock>, String> {
+    (1..)
+        .map_while(|j| nirs.group(&format!("data{j}")).ok().map(|g| (j, g)))
+        .map(|(j, g)| parse_data_block(&g, j))
+        .collect()
+}
+
+fn parse_data_block(data: &Group, block_idx: usize) -> Result<DataBlock, String> {
+    let time: Vec<f64> = data
+        .dataset("time")
+        .map_err(|e| format!("data{}/time: {}", block_idx, e))?
+        .read_raw()
+        .map_err(|e| format!("data{}/time parse: {}", block_idx, e))?;
+
+    let ts: Array2<f64> = data
+        .dataset("dataTimeSeries")
+        .map_err(|e| format!("data{}/dataTimeSeries: {}", block_idx, e))?
+        .read_2d()
+        .map_err(|e| format!("data{}/dataTimeSeries parse: {}", block_idx, e))?;
+
+    let n_cols = ts.ncols();
+    let measurements = (0..n_cols)
+        .map(|col| parse_measurement(data, block_idx, col, &ts))
+        .collect::<Result<Vec<Measurement>, String>>()?;
+
+    Ok(DataBlock { time, measurements })
+}
+
+fn parse_measurement(
+    data: &Group,
+    block_idx: usize,
+    col: usize,
+    ts: &Array2<f64>,
+) -> Result<Measurement, String> {
+    let ml_name = format!("measurementList{}", col + 1);
+    let ml = data
+        .group(&ml_name)
+        .map_err(|e| format!("data{}/{}: {}", block_idx, ml_name, e))?;
+
+    let ctx = |field: &str| format!("data{}/{}/{}", block_idx, ml_name, field);
+
+    let source_index = ml
+        .dataset("sourceIndex")
+        .map_err(|e| format!("{}: {}", ctx("sourceIndex"), e))
+        .and_then(|ds| read_i32(&ds).map_err(|e| format!("{}: {}", ctx("sourceIndex"), e)))?
+        as usize;
+
+    let detector_index = ml
+        .dataset("detectorIndex")
+        .map_err(|e| format!("{}: {}", ctx("detectorIndex"), e))
+        .and_then(|ds| read_i32(&ds).map_err(|e| format!("{}: {}", ctx("detectorIndex"), e)))?
+        as usize;
+
+    let wavelength_index = ml
+        .dataset("wavelengthIndex")
+        .map_err(|e| format!("{}: {}", ctx("wavelengthIndex"), e))
+        .and_then(|ds| read_i32(&ds).map_err(|e| format!("{}: {}", ctx("wavelengthIndex"), e)))?
+        as usize;
+
+    let data_type = ml
+        .dataset("dataType")
+        .map_err(|e| format!("{}: {}", ctx("dataType"), e))
+        .and_then(|ds| read_i32(&ds).map_err(|e| format!("{}: {}", ctx("dataType"), e)))?;
+
+    let data_type_label = ml
+        .dataset("dataTypeLabel")
+        .ok()
+        .and_then(|ds| read_string(&ds).ok())
+        .unwrap_or_default();
+
+    let data_type_index = ml
+        .dataset("dataTypeIndex")
+        .ok()
+        .and_then(|ds| read_i32(&ds).ok())
+        .unwrap_or(0);
+
+    let data_unit = ml
+        .dataset("dataUnit")
+        .ok()
+        .and_then(|ds| read_string(&ds).ok());
+
+    let wavelength_actual = ml
+        .dataset("wavelengthActual")
+        .ok()
+        .and_then(|ds| ds.read_scalar::<f64>().ok());
+
+    let source_power = ml
+        .dataset("sourcePower")
+        .ok()
+        .and_then(|ds| ds.read_scalar::<f64>().ok());
+
+    let detector_gain = ml
+        .dataset("detectorGain")
+        .ok()
+        .and_then(|ds| ds.read_scalar::<f64>().ok());
+
+    let module_index = ml
+        .dataset("moduleIndex")
+        .ok()
+        .and_then(|ds| ds.read_scalar::<f64>().ok());
+
+    let signal: Vec<f64> = ts.column(col).to_vec();
+
+    Ok(Measurement {
+        source_index,
+        detector_index,
+        wavelength_index,
+        data_type,
+        data_type_label,
+        data_type_index,
+        data_unit,
+        data: signal,
+        wavelength_actual,
+        source_power,
+        detector_gain,
+        module_index,
+    })
+}
+
+// =============================================================================
+// Events  —  nirs/stim{i}/*
+// =============================================================================
+fn parse_events(nirs: &Group) -> Result<Vec<Event>, String> {
+    (1..)
+        .map_while(|i| nirs.group(&format!("stim{i}")).ok().map(|stim| (i, stim)))
+        .map(|(i, stim)| -> Result<Event, String> {
+            let name = stim
+                .dataset("name")
+                .map_err(|e| format!("stim{i}/name: {e}"))
+                .and_then(|ds| read_string(&ds).map_err(|e| format!("stim{i}/name parse: {e}")))?;
+
+            let data: Array2<f64> = stim
+                .dataset("data")
+                .map_err(|e| format!("stim{i}/data: {e}"))?
+                .read_2d()
+                .map_err(|e| format!("stim{i}/data parse: {e}"))?;
+
+            let mut markers: Vec<EventMarker> = data
+                .rows()
+                .into_iter()
+                .filter(|row| row.len() >= 3)
+                .map(|row| EventMarker { onset: row[0], duration: row[1], value: row[2] })
+                .collect();
+
+            markers.sort_unstable_by(|a, b| a.onset.partial_cmp(&b.onset).unwrap());
+            Ok(Event { name, markers })
+        })
+        .collect()
+}
+
+// =============================================================================
+// Auxiliaries  —  nirs/aux{i}/*
+// =============================================================================
+fn parse_auxiliaries(nirs: &Group) -> Result<Vec<AuxiliaryData>, String> {
+    (1..)
+        .map_while(|i| nirs.group(&format!("aux{i}")).ok().map(|aux| (i, aux)))
+        .map(|(i, aux)| -> Result<AuxiliaryData, String> {
+            let name = aux
+                .dataset("name")
+                .map_err(|e| format!("aux{i}/name: {e}"))
+                .and_then(|ds| read_string(&ds).map_err(|e| format!("aux{i}/name parse: {e}")))?;
+
+            let unit = aux
+                .dataset("dataUnit")
+                .map_err(|e| format!("aux{i}/dataUnit: {e}"))
+                .and_then(|ds| read_string(&ds).map_err(|e| format!("aux{i}/dataUnit parse: {e}")))?;
+
+            let data: Vec<f64> = aux
+                .dataset("dataTimeSeries")
+                .map_err(|e| format!("aux{i}/dataTimeSeries: {e}"))?
+                .read_raw()
+                .map_err(|e| format!("aux{i}/dataTimeSeries parse: {e}"))?;
+
+            let time: Vec<f64> = aux
+                .dataset("time")
+                .map_err(|e| format!("aux{i}/time: {e}"))?
+                .read_raw()
+                .map_err(|e| format!("aux{i}/time parse: {e}"))?;
+
+            let time_offset = aux
+                .dataset("timeOffset")
+                .ok()
+                .and_then(|ds| ds.read_scalar::<f64>().ok());
+
+            Ok(AuxiliaryData { name, unit, data, time, time_offset })
+        })
+        .collect()
 }
