@@ -2,34 +2,72 @@
     import { onMount, onDestroy } from "svelte";
     import { invoke } from "@tauri-apps/api/core";
     import { listen } from "@tauri-apps/api/event";
-    import MenuBar from "./lib/components/menubar.svelte";
-    import InfoPanel from "./lib/components/infopanel.svelte";
-    import ChannelSelector from "./lib/components/ChannelSelector.svelte";
-    import DataPlotter from "./lib/components/DataPlotter.svelte";
-    import Viewport3D from "./lib/components/Viewport3D.svelte";
-    import SceneInspector from "./lib/components/SceneInspector.svelte";
-    import Statusbar from "./lib/components/statusbar.svelte";
 
-    let activeTab = "info";
+    // Layout
+    import MenuBar from "./lib/Bars/menubar.svelte";
+    import Statusbar from "./lib/Bars/statusbar.svelte";
 
+    // NIRS
+    import Info from "./lib/NIRS/Info.svelte";
+
+    // Plotting
+    import TimeSeries from "./lib/Plotting/TimeSeries.svelte";
+    import Spectrogram from "./lib/Plotting/Spectrogram.svelte";
+    import Frequency from "./lib/Plotting/Frequency.svelte";
+    import HRF_CM_Panel from "./lib/Plotting/HRF_CM_Panel.svelte";
+
+    // Channel Selection
+    import ChannelSelector2D from "./lib/ChannelSelection/ChannelSelector2D.svelte";
+
+    // Anatomy 3D
+    import AnatomyViewport from "./lib/Anatomy/Viewport.svelte";
+    import AnatomyInspector from "./lib/Anatomy/SceneInspector.svelte";
+
+    // HDF5
+    import HDF5TreeWalker from "./lib/HDF5/HDF5TreeWalker.svelte";
+
+    // ── Tab state ─────────────────────────────────────────────────────────────
+    let activeTopLeft = "info"; // "info" | "hdf5"
+    let activeTimeFreq = "spectrogram"; // "spectrogram" | "frequency"
+
+    // ── App state ─────────────────────────────────────────────────────────────
     let summary = null;
     let unlisten;
 
-    // DOM refs for measuring
+    // ── DOM refs ──────────────────────────────────────────────────────────────
     let workspaceEl;
+    let topRowEl;
+    let rightPlotEl;
     let bottomRowEl;
 
-    // Panel sizes in pixels; null = use flex defaults until first layout
-    let topHeight = null;
-    let leftWidth = null;
+    // ── Panel sizes (px); null = flex defaults until first layout ─────────────
+    let topHeight = null; // top row height
+    let topLeftWidth = null; // left panel in top row
+    let innerTopHeight = null; // TimeSeries height inside right column
+    let botChWidth = null; // ChannelSelector2D width
+    let botHRFWidth = null; // HRF_CM_Panel width
 
-    // Drag state
-    let draggingRow = false;
-    let draggingCol = false;
-    let dragStartY = 0,
-        dragStartTop = 0;
-    let dragStartX = 0,
-        dragStartLeft = 0;
+    // ── Drag state ────────────────────────────────────────────────────────────
+    // One variable tracks which divider is active; null = not dragging
+    let dragging = null; // 'row' | 'topCol' | 'innerRow' | 'botCol1' | 'botCol2'
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let dragStartSize = 0;
+
+    const LAYOUT_KEY = "nirwizard_layout";
+
+    function saveLayout() {
+        localStorage.setItem(
+            LAYOUT_KEY,
+            JSON.stringify({
+                topHeight,
+                topLeftWidth,
+                innerTopHeight,
+                botChWidth,
+                botHRFWidth,
+            }),
+        );
+    }
 
     onMount(async () => {
         summary = await invoke("get_snirf_summary");
@@ -37,59 +75,63 @@
             summary = event.payload;
         });
 
-        // Seed pixel sizes from actual DOM dimensions so layout is stable on load
-        topHeight = Math.round(workspaceEl.clientHeight * 0.6);
-        leftWidth = Math.round(bottomRowEl.clientWidth * 0.6);
+        const w = workspaceEl.clientWidth;
+        const h = workspaceEl.clientHeight;
+
+        const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? "null");
+        topHeight = saved?.topHeight ?? Math.round(h * 0.6);
+        topLeftWidth = saved?.topLeftWidth ?? Math.round(w * 0.22);
+        innerTopHeight = saved?.innerTopHeight ?? Math.round(topHeight * 0.65);
+        botChWidth = saved?.botChWidth ?? Math.round(w * 0.22);
+        botHRFWidth = saved?.botHRFWidth ?? Math.round(w * 0.3);
     });
 
     onDestroy(() => {
         if (unlisten) unlisten();
     });
 
-    // ── Row divider (top ↕ bottom) ────────────────────────────────────────────
-    function startRowDrag(e) {
-        e.preventDefault();
-        draggingRow = true;
-        dragStartY = e.clientY;
-        dragStartTop = topHeight;
-        document.body.style.cursor = "ns-resize";
-        document.body.style.userSelect = "none";
-    }
+    // ── Drag helpers ──────────────────────────────────────────────────────────
 
-    // ── Column divider (left ↔ right) ─────────────────────────────────────────
-    function startColDrag(e) {
+    function startDrag(type, e, currentSize) {
         e.preventDefault();
-        draggingCol = true;
+        dragging = type;
         dragStartX = e.clientX;
-        dragStartLeft = leftWidth;
-        document.body.style.cursor = "ew-resize";
+        dragStartY = e.clientY;
+        dragStartSize = currentSize;
         document.body.style.userSelect = "none";
+        document.body.style.cursor =
+            type === "row" || type === "innerRow" ? "ns-resize" : "ew-resize";
     }
 
-    // ── Global mouse tracking ─────────────────────────────────────────────────
     function onMouseMove(e) {
-        if (draggingRow) {
+        if (!dragging) return;
+        const dy = e.clientY - dragStartY;
+        const dx = e.clientX - dragStartX;
+
+        if (dragging === "row") {
             const maxH = workspaceEl.clientHeight - 80;
-            topHeight = Math.max(
-                80,
-                Math.min(maxH, dragStartTop + (e.clientY - dragStartY)),
-            );
-        }
-        if (draggingCol) {
-            const maxW = bottomRowEl.clientWidth - 120;
-            leftWidth = Math.max(
-                120,
-                Math.min(maxW, dragStartLeft + (e.clientX - dragStartX)),
-            );
+            topHeight = Math.max(80, Math.min(maxH, dragStartSize + dy));
+        } else if (dragging === "topCol") {
+            const maxW = topRowEl.clientWidth - 120;
+            topLeftWidth = Math.max(120, Math.min(maxW, dragStartSize + dx));
+        } else if (dragging === "innerRow") {
+            const maxH = rightPlotEl.clientHeight - 60;
+            innerTopHeight = Math.max(60, Math.min(maxH, dragStartSize + dy));
+        } else if (dragging === "botCol1") {
+            const maxW = bottomRowEl.clientWidth - 240;
+            botChWidth = Math.max(100, Math.min(maxW, dragStartSize + dx));
+        } else if (dragging === "botCol2") {
+            const maxW = bottomRowEl.clientWidth - botChWidth - 120;
+            botHRFWidth = Math.max(100, Math.min(maxW, dragStartSize + dx));
         }
     }
 
     function onMouseUp() {
-        if (draggingRow || draggingCol) {
+        if (dragging) {
+            dragging = null;
             document.body.style.cursor = "";
             document.body.style.userSelect = "";
-            draggingRow = false;
-            draggingCol = false;
+            saveLayout();
         }
     }
 </script>
@@ -101,67 +143,150 @@
     <MenuBar />
 
     <div class="workspace" bind:this={workspaceEl}>
-        <!-- ── Top panel: DataPlotter ── -->
+        <!-- ════════════════════════════════════════════════════════════════
+             TOP ROW  ·  Info/HDF5 (left)  |  TimeSeries + Spectrogram (right)
+             ════════════════════════════════════════════════════════════════ -->
         <div
-            class="panel"
+            class="top-row"
+            bind:this={topRowEl}
             style={topHeight !== null
                 ? `height:${topHeight}px; flex:none`
-                : "flex:2"}
+                : "flex:3"}
         >
-            <DataPlotter />
-        </div>
-
-        <!-- ── Row divider ── -->
-        <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div
-            class="divider divider-row"
-            class:dragging={draggingRow}
-            on:mousedown={startRowDrag}
-        />
-
-        <!-- ── Bottom strip ── -->
-        <div class="bottom-row" bind:this={bottomRowEl}>
-            <!-- Left: ChannelSelector -->
+            <!-- Left: Info / HDF5 Walker -->
             <div
                 class="panel"
-                style={leftWidth !== null
-                    ? `width:${leftWidth}px; flex:none`
-                    : "flex:1.5"}
+                style={topLeftWidth !== null
+                    ? `width:${topLeftWidth}px; flex:none`
+                    : "flex:1"}
             >
-                <ChannelSelector />
-            </div>
-
-            <!-- ── Column divider ── -->
-            <!-- svelte-ignore a11y-no-static-element-interactions -->
-            <div
-                class="divider divider-col"
-                class:dragging={draggingCol}
-                on:mousedown={startColDrag}
-            />
-
-            <!-- Right: tabbed Info -->
-            <div class="panel" style="flex:1">
                 <div class="tab-bar">
                     <button
                         class="tab-btn"
-                        class:active={activeTab === "info"}
-                        on:click={() => (activeTab = "info")}>Info</button
+                        class:active={activeTopLeft === "info"}
+                        on:click={() => (activeTopLeft = "info")}>Info</button
                     >
-
                     <button
                         class="tab-btn"
-                        class:active={activeTab === "3d"}
-                        on:click={() => (activeTab = "3d")}>3D View</button
+                        class:active={activeTopLeft === "hdf5"}
+                        on:click={() => (activeTopLeft = "hdf5")}>HDF5</button
                     >
                 </div>
-                {#if activeTab === "info"}
-                    <InfoPanel {summary} />
+                {#if activeTopLeft === "info"}
+                    <Info {summary} />
                 {:else}
-                    <div class="scene-view">
-                        <Viewport3D />
-                        <SceneInspector />
-                    </div>
+                    <HDF5TreeWalker />
                 {/if}
+            </div>
+
+            <!-- ── Top-row column divider ── -->
+            <!-- svelte-ignore a11y-no-static-element-interactions -->
+            <div
+                class="divider divider-col"
+                class:dragging={dragging === "topCol"}
+                on:mousedown={(e) => startDrag("topCol", e, topLeftWidth)}
+            />
+
+            <!-- Right column: TimeSeries (top) + Spectrogram/Frequency (bottom) -->
+            <div class="panel right-plots" bind:this={rightPlotEl}>
+                <!-- TimeSeries -->
+                <div
+                    class="panel"
+                    style={innerTopHeight !== null
+                        ? `height:${innerTopHeight}px; flex:none`
+                        : "flex:2"}
+                >
+                    <TimeSeries />
+                </div>
+
+                <!-- ── Inner row divider ── -->
+                <!-- svelte-ignore a11y-no-static-element-interactions -->
+                <div
+                    class="divider divider-row"
+                    class:dragging={dragging === "innerRow"}
+                    on:mousedown={(e) =>
+                        startDrag("innerRow", e, innerTopHeight)}
+                />
+
+                <!-- Spectrogram / Frequency tabs -->
+                <div class="panel" style="flex:1">
+                    <div class="tab-bar">
+                        <button
+                            class="tab-btn"
+                            class:active={activeTimeFreq === "spectrogram"}
+                            on:click={() => (activeTimeFreq = "spectrogram")}
+                            >Spectrogram</button
+                        >
+                        <button
+                            class="tab-btn"
+                            class:active={activeTimeFreq === "frequency"}
+                            on:click={() => (activeTimeFreq = "frequency")}
+                            >Frequency</button
+                        >
+                    </div>
+                    {#if activeTimeFreq === "spectrogram"}
+                        <Spectrogram />
+                    {:else}
+                        <Frequency />
+                    {/if}
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Main row divider ── -->
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <div
+            class="divider divider-row"
+            class:dragging={dragging === "row"}
+            on:mousedown={(e) => startDrag("row", e, topHeight)}
+        />
+
+        <!-- ════════════════════════════════════════════════════════════════
+             BOTTOM ROW  ·  ChSel2D  |  HRF/CM  |  Anatomy 3D
+             ════════════════════════════════════════════════════════════════ -->
+        <div class="bottom-row" bind:this={bottomRowEl}>
+            <!-- ChannelSelector 2D -->
+            <div
+                class="panel"
+                style={botChWidth !== null
+                    ? `width:${botChWidth}px; flex:none`
+                    : "flex:1"}
+            >
+                <ChannelSelector2D />
+            </div>
+
+            <!-- ── Bottom col divider 1 ── -->
+            <!-- svelte-ignore a11y-no-static-element-interactions -->
+            <div
+                class="divider divider-col"
+                class:dragging={dragging === "botCol1"}
+                on:mousedown={(e) => startDrag("botCol1", e, botChWidth)}
+            />
+
+            <!-- HRF / Connectivity panel -->
+            <div
+                class="panel"
+                style={botHRFWidth !== null
+                    ? `width:${botHRFWidth}px; flex:none`
+                    : "flex:1"}
+            >
+                <HRF_CM_Panel />
+            </div>
+
+            <!-- ── Bottom col divider 2 ── -->
+            <!-- svelte-ignore a11y-no-static-element-interactions -->
+            <div
+                class="divider divider-col"
+                class:dragging={dragging === "botCol2"}
+                on:mousedown={(e) => startDrag("botCol2", e, botHRFWidth)}
+            />
+
+            <!-- Anatomy 3D View -->
+            <div class="panel" style="flex:1">
+                <div class="scene-view">
+                    <AnatomyViewport />
+                    <AnatomyInspector />
+                </div>
             </div>
         </div>
     </div>
@@ -195,7 +320,7 @@
         color: var(--text-primary);
     }
 
-    /* ── Main workspace: stacks plotter on top, bottom strip below ── */
+    /* ── Main workspace ── */
     .workspace {
         flex: 1;
         display: flex;
@@ -204,7 +329,20 @@
         overflow: hidden;
     }
 
-    /* ── Bottom strip: channel selector left, info right ── */
+    /* ── Top row: left info panel + right plotting column ── */
+    .top-row {
+        display: flex;
+        flex-direction: row;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    /* ── Right plotting column: TimeSeries stacked over Spectrogram/Freq ── */
+    .right-plots {
+        flex: 1;
+    }
+
+    /* ── Bottom row: ChSel2D + HRF/CM + Anatomy ── */
     .bottom-row {
         flex: 1;
         display: flex;
@@ -218,6 +356,15 @@
         display: flex;
         flex-direction: column;
         min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    /* ── Anatomy scene view: viewport + inspector side by side ── */
+    .scene-view {
+        flex: 1;
+        display: flex;
+        flex-direction: row;
         min-height: 0;
         overflow: hidden;
     }
@@ -264,7 +411,6 @@
     /* ── Tab bar ── */
     .tab-bar {
         display: flex;
-        gap: 0;
         background: var(--bg-surface);
         border-bottom: 1px solid var(--border-subtle);
         flex-shrink: 0;
@@ -293,13 +439,5 @@
     .tab-btn.active {
         color: var(--accent-green);
         border-bottom-color: var(--accent-green);
-    }
-
-    .scene-view {
-        flex: 1;
-        display: flex;
-        flex-direction: row;
-        min-height: 0;
-        overflow: hidden;
     }
 </style>

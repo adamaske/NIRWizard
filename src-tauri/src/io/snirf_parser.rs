@@ -160,9 +160,7 @@ fn parse_snirf_inner(path: &str) -> Result<SNIRF> {
         loop {
             match file.group(&format!("nirs{i}")) {
                 Ok(g) => {
-                    nirs_entries.push(
-                        parse_nirs_entry(&g).with_context(|| format!("/nirs{i}"))?,
-                    );
+                    nirs_entries.push(parse_nirs_entry(&g).with_context(|| format!("/nirs{i}"))?);
                     i += 1;
                 }
                 Err(_) => break,
@@ -256,9 +254,7 @@ fn resolve_positions(
             d3.slice_mut(ndarray::s![.., 0..2]).assign(&d2);
             Ok((d2, d3))
         }
-        (None, None) => bail!(
-            "neither {label}Pos2D nor {label}Pos3D found"
-        ),
+        (None, None) => bail!("neither {label}Pos2D nor {label}Pos3D found"),
     }
 }
 
@@ -280,8 +276,14 @@ fn parse_probe(nirs: &Group) -> Result<Probe> {
     // SNIRF spec: either *Pos2D or *Pos3D is sufficient.
     // resolve_positions extrapolates whichever is absent.
     let (s2d, s3d) = resolve_positions(
-        probe.dataset("sourcePos2D").and_then(|ds| ds.read_2d()).ok(),
-        probe.dataset("sourcePos3D").and_then(|ds| ds.read_2d()).ok(),
+        probe
+            .dataset("sourcePos2D")
+            .and_then(|ds| ds.read_2d())
+            .ok(),
+        probe
+            .dataset("sourcePos3D")
+            .and_then(|ds| ds.read_2d())
+            .ok(),
         "source",
     )
     .context("probe source positions")?;
@@ -383,9 +385,9 @@ fn parse_landmarks(probe: &Group) -> Result<Option<Vec<Landmark>>> {
             pos_2d: pos2d
                 .as_ref()
                 .and_then(|arr| (i < arr.nrows()).then(|| [arr[[i, 0]], arr[[i, 1]]])),
-            pos_3d: pos3d.as_ref().and_then(|arr| {
-                (i < arr.nrows()).then(|| [arr[[i, 0]], arr[[i, 1]], arr[[i, 2]]])
-            }),
+            pos_3d: pos3d
+                .as_ref()
+                .and_then(|arr| (i < arr.nrows()).then(|| [arr[[i, 0]], arr[[i, 1]], arr[[i, 2]]])),
         })
         .collect();
 
@@ -510,9 +512,7 @@ fn parse_measurement(
 fn parse_events(nirs: &Group) -> Result<Vec<Event>> {
     (1..)
         .map_while(|i| nirs.group(&format!("stim{i}")).ok().map(|g| (i, g)))
-        .map(|(i, stim)| {
-            parse_event(&stim).with_context(|| format!("stim{i}"))
-        })
+        .map(|(i, stim)| parse_event(&stim).with_context(|| format!("stim{i}")))
         .collect()
 }
 
@@ -549,9 +549,7 @@ fn parse_event(stim: &Group) -> Result<Event> {
 fn parse_auxiliaries(nirs: &Group) -> Result<Vec<AuxiliaryData>> {
     (1..)
         .map_while(|i| nirs.group(&format!("aux{i}")).ok().map(|g| (i, g)))
-        .map(|(i, aux)| {
-            parse_auxiliary(&aux).with_context(|| format!("aux{i}"))
-        })
+        .map(|(i, aux)| parse_auxiliary(&aux).with_context(|| format!("aux{i}")))
         .collect()
 }
 
@@ -559,7 +557,9 @@ fn parse_auxiliary(aux: &Group) -> Result<AuxiliaryData> {
     let name_ds = aux.dataset("name").context("name dataset missing")?;
     let name = read_string(&name_ds).context("name: read failed")?;
 
-    let unit_ds = aux.dataset("dataUnit").context("dataUnit dataset missing")?;
+    let unit_ds = aux
+        .dataset("dataUnit")
+        .context("dataUnit dataset missing")?;
     let unit = read_string(&unit_ds).context("dataUnit: read failed")?;
 
     let data: Vec<f64> = aux

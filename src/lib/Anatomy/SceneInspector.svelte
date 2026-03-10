@@ -3,30 +3,23 @@
   import { listen } from '@tauri-apps/api/event';
   import { invoke } from '@tauri-apps/api/core';
   import { anatomyLayerStates, optodeState, voxelVolumeStates } from '../stores/sceneState.js';
-  import SceneObjectEditor from './SceneObjectEditor.svelte';
-  import OptodeLayoutEditor from './OptodeLayoutEditor.svelte';
-  import VoxelEditor from './VoxelEditor.svelte';
+  import SceneObjectEditor from '../components/SceneObjectEditor.svelte';
+  import OptodeLayoutEditor from '../components/OptodeLayoutEditor.svelte';
+  import VoxelEditor from '../components/VoxelEditor.svelte';
 
-  // Display order and labels for anatomy layers
   const LAYER_ORDER  = ['skull', 'csf', 'grey_matter', 'white_matter'];
-  const LAYER_LABELS = {
-    skull:        'Skull',
-    csf:          'CSF',
-    grey_matter:  'Grey Matter',
-    white_matter: 'White Matter',
-  };
+  const LAYER_LABELS = { skull: 'Skull', csf: 'CSF', grey_matter: 'Grey Matter', white_matter: 'White Matter' };
 
   let hasProbe = false;
   let probeExpanded = true;
-  let layerExpanded = {};   // layer → bool
-  let voxelExpanded = {};   // volume name → bool
-  let voxelInfos = {};      // volume name → VoxelVolumeInfo (fetched once)
+  let layerExpanded = {};
+  let voxelExpanded = {};
+  let voxelInfos = {};
   let localProbe = null;
 
   const unlistenFns = [];
   const unsubProbe = optodeState.subscribe(s => { localProbe = s; });
 
-  // Derive ordered list of loaded layers from store
   $: loadedLayers = LAYER_ORDER.filter(l => $anatomyLayerStates[l] != null);
   $: loadedVolumes = Object.keys($voxelVolumeStates);
 
@@ -36,16 +29,12 @@
         if (layerExpanded[layer] === undefined) layerExpanded[layer] = true;
         layerExpanded = layerExpanded;
       }
-      // Fetch info for any newly announced voxel volumes
       for (const name of (e.payload.voxel_volumes ?? [])) {
         if (!voxelInfos[name]) {
           voxelInfos[name] = await invoke('get_voxel_volume_info', { name });
           voxelInfos = voxelInfos;
         }
-        if (voxelExpanded[name] === undefined) {
-          voxelExpanded[name] = true;
-          voxelExpanded = voxelExpanded;
-        }
+        if (voxelExpanded[name] === undefined) { voxelExpanded[name] = true; voxelExpanded = voxelExpanded; }
       }
     }));
     unlistenFns.push(await listen('snirf-loaded', () => { hasProbe = true; }));
@@ -59,17 +48,8 @@
   function onLayerChange(layer, e) {
     const s = e.detail;
     anatomyLayerStates.update(m => ({ ...m, [layer]: s }));
-    invoke('set_anatomy_transform', {
-      layer,
-      position: s.position,
-      rotation: s.rotation,
-      scale: s.scale,
-    }).catch(console.error);
-    invoke('set_anatomy_opacity', {
-      layer,
-      opacity: s.opacity,
-      visible: s.visible,
-    }).catch(console.error);
+    invoke('set_anatomy_transform', { layer, position: s.position, rotation: s.rotation, scale: s.scale }).catch(console.error);
+    invoke('set_anatomy_opacity', { layer, opacity: s.opacity, visible: s.visible }).catch(console.error);
   }
 
   function onVoxelChange(name, e) {
@@ -79,15 +59,8 @@
   function onOptodeChange(e) {
     const s = e.detail;
     optodeState.set(s);
-    invoke('set_optode_layout_transform', {
-      position: s.transform.position,
-      rotation: s.transform.rotation,
-      scale: s.transform.scale,
-    }).catch(console.error);
-    invoke('set_optode_layout_settings', {
-      spreadFactor: s.settings.spread_factor,
-      optodeRadius: s.settings.optode_radius,
-    }).catch(console.error);
+    invoke('set_optode_layout_transform', { position: s.transform.position, rotation: s.transform.rotation, scale: s.transform.scale }).catch(console.error);
+    invoke('set_optode_layout_settings', { spreadFactor: s.settings.spread_factor, optodeRadius: s.settings.optode_radius }).catch(console.error);
   }
 </script>
 
@@ -137,12 +110,7 @@
         </div>
         {#if voxelExpanded[name]}
           <div class="section-body">
-            <VoxelEditor
-              {name}
-              info={voxelInfos[name]}
-              state={$voxelVolumeStates[name]}
-              on:change={e => onVoxelChange(name, e)}
-            />
+            <VoxelEditor {name} info={voxelInfos[name]} state={$voxelVolumeStates[name]} on:change={e => onVoxelChange(name, e)} />
           </div>
         {/if}
       </section>
@@ -179,9 +147,7 @@
     flex-shrink: 0;
   }
 
-  section {
-    border-bottom: 1px solid var(--border-subtle);
-  }
+  section { border-bottom: 1px solid var(--border-subtle); }
 
   .section-header {
     display: flex;
@@ -196,24 +162,9 @@
     transition: background 0.1s;
   }
 
-  .section-header:hover {
-    background: var(--bg-base);
-  }
+  .section-header:hover { background: var(--bg-base); }
+  .chevron { font-size: 9px; color: var(--text-muted); width: 10px; }
+  .section-body { padding: 6px 10px 10px; }
 
-  .chevron {
-    font-size: 9px;
-    color: var(--text-muted);
-    width: 10px;
-  }
-
-  .section-body {
-    padding: 6px 10px 10px;
-  }
-
-  .empty {
-    padding: 16px 10px;
-    font-size: 10px;
-    color: var(--text-muted);
-    line-height: 1.5;
-  }
+  .empty { padding: 16px 10px; font-size: 10px; color: var(--text-muted); line-height: 1.5; }
 </style>

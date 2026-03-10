@@ -142,7 +142,6 @@
     background: var(--bg-base);
   }
 
-  /* ── Empty state ── */
   .empty-state {
     flex: 1;
     display: flex;
@@ -153,23 +152,9 @@
     color: var(--text-muted);
   }
 
-  .empty-icon {
-    color: var(--text-faint);
-    margin-bottom: 4px;
-  }
-
-  .empty-title {
-    margin: 0;
-    font-size: 15px;
-    color: var(--text-secondary);
-    font-weight: 500;
-  }
-
-  .empty-hint {
-    margin: 0;
-    font-size: 12px;
-    color: var(--text-muted);
-  }
+  .empty-icon { color: var(--text-faint); margin-bottom: 4px; }
+  .empty-title { margin: 0; font-size: 15px; color: var(--text-secondary); font-weight: 500; }
+  .empty-hint { margin: 0; font-size: 12px; color: var(--text-muted); }
 
   .load-btn {
     margin-top: 12px;
@@ -191,11 +176,6 @@
     border-color: var(--accent-green);
   }
 
-  .load-btn:active {
-    background: var(--bg-overlay);
-  }
-
-  /* ── Loaded state ── */
   .panel-scroll {
     flex: 1;
     overflow-y: auto;
@@ -205,20 +185,10 @@
     gap: 14px;
   }
 
-  .panel-scroll::-webkit-scrollbar {
-    width: 6px;
-  }
+  .panel-scroll::-webkit-scrollbar { width: 6px; }
+  .panel-scroll::-webkit-scrollbar-track { background: transparent; }
+  .panel-scroll::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
 
-  .panel-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .panel-scroll::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-    border-radius: 3px;
-  }
-
-  /* ── Cards ── */
   .card {
     background: var(--bg-surface);
     border: 1px solid var(--border-subtle);
@@ -253,54 +223,21 @@
     letter-spacing: 0;
   }
 
-  /* ── Grid layout for key/value pairs ── */
-  .grid-2col {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px 24px;
-  }
+  .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
 
-  .kv {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
+  .kv { display: flex; flex-direction: column; gap: 2px; }
 
-  .key {
-    font-size: 10px;
-    color: var(--text-faint);
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-  }
+  .key { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.6px; }
 
-  .value {
-    font-size: 14px;
-    color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
-  }
+  .value { font-size: 14px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 
-  .filename {
-    font-size: 13px;
-    color: var(--text-secondary);
-    word-break: break-all;
-  }
+  .filename { font-size: 13px; color: var(--text-secondary); word-break: break-all; }
 
-  .wavelength {
-    font-size: 14px;
-    color: var(--text-primary);
-  }
+  .wavelength { font-size: 14px; color: var(--text-primary); }
 
-  .row.single {
-    display: flex;
-    align-items: center;
-  }
+  .row.single { display: flex; align-items: center; }
 
-  /* ── Events ── */
-  .event-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
+  .event-list { display: flex; flex-direction: column; gap: 6px; }
 
   .event-row {
     display: flex;
@@ -312,23 +249,9 @@
     border-radius: 5px;
   }
 
-  .event-name {
-    font-size: 13px;
-    color: var(--text-primary);
-    font-family: "Cascadia Code", "Consolas", monospace;
-  }
+  .event-name { font-size: 13px; color: var(--text-primary); font-family: "Cascadia Code", "Consolas", monospace; }
 
-  .event-count {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-variant-numeric: tabular-nums;
-  }
+  .event-count { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
-  /* ── Empty section text ── */
-  .empty-section {
-    font-size: 12px;
-    color: var(--text-faint);
-    margin: 0;
-    font-style: italic;
-  }
+  .empty-section { font-size: 12px; color: var(--text-faint); margin: 0; font-style: italic; }
 </style>
