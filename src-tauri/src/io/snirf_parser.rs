@@ -1,7 +1,9 @@
-use crate::domain::*;
+use anyhow::{bail, Context, Result};
 use hdf5::{File, Group};
 use nalgebra::{Vector2, Vector3};
 use ndarray::Array2;
+
+use crate::domain::{SnirfError, *};
 
 // =============================================================================
 // HDF5 tree inspector (debug builds only)
@@ -84,7 +86,7 @@ fn print_hdf5_tree(path: &str, file: &File) {
 // =============================================================================
 
 /// Read a string dataset regardless of encoding or shape.
-fn read_string(ds: &hdf5::Dataset) -> Result<String, String> {
+fn read_string(ds: &hdf5::Dataset) -> Result<String> {
     if let Ok(s) = ds.read_scalar::<hdf5::types::VarLenUnicode>() {
         return Ok(s.to_string());
     }
@@ -105,30 +107,40 @@ fn read_string(ds: &hdf5::Dataset) -> Result<String, String> {
     {
         return Ok(s.to_string());
     }
-    Err("no readable string encoding found".to_string())
+    bail!("no readable string encoding found")
 }
 
 /// Read an i32 dataset regardless of shape.
-fn read_i32(ds: &hdf5::Dataset) -> Result<i32, String> {
+fn read_i32(ds: &hdf5::Dataset) -> Result<i32> {
     ds.read_scalar::<i32>()
         .ok()
         .or_else(|| ds.read_raw::<i32>().ok().and_then(|v| v.into_iter().next()))
-        .ok_or_else(|| "failed to read i32 value".to_string())
+        .context("failed to read i32 value")
 }
 
 // =============================================================================
 // Public entry point
 // =============================================================================
-pub fn parse_snirf(path: &str) -> Result<SNIRF, String> {
-    let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+
+/// Parse a SNIRF file from `path`.
+///
+/// Returns a typed [`SnirfError`] so callers can distinguish a missing `/nirs`
+/// group from a lower-level parse failure.  Use `{:#}` formatting on the error
+/// to print the full context chain.
+pub fn parse_snirf(path: &str) -> Result<SNIRF, SnirfError> {
+    parse_snirf_inner(path).map_err(SnirfError::from)
+}
+
+fn parse_snirf_inner(path: &str) -> Result<SNIRF> {
+    let file = File::open(path).with_context(|| format!("Failed to open '{path}'"))?;
 
     //#[cfg(debug_assertions)]
     //print_hdf5_tree(path, &file);
-    //
-    let _format_version = file
+
+    let format_version = file
         .dataset("formatVersion")
-        .map_err(|e| format!("Failed to read formatVersion: {}", e))
-        .and_then(|ds| read_string(&ds))?;
+        .context("Missing required dataset 'formatVersion'")?;
+    let format_version = read_string(&format_version).context("formatVersion: read failed")?;
 
     let file_descriptor = FileDescriptor {
         filepath: path.to_string(),
@@ -142,13 +154,15 @@ pub fn parse_snirf(path: &str) -> Result<SNIRF, String> {
     // SNIRF allows a single `/nirs` group or indexed `/nirs1`, `/nirs2`, …
     let mut nirs_entries = Vec::new();
     if let Ok(g) = file.group("nirs") {
-        nirs_entries.push(parse_nirs_entry(&g)?);
+        nirs_entries.push(parse_nirs_entry(&g).context("/nirs")?);
     } else {
         let mut i = 1usize;
         loop {
-            match file.group(&format!("nirs{}", i)) {
+            match file.group(&format!("nirs{i}")) {
                 Ok(g) => {
-                    nirs_entries.push(parse_nirs_entry(&g)?);
+                    nirs_entries.push(
+                        parse_nirs_entry(&g).with_context(|| format!("/nirs{i}"))?,
+                    );
                     i += 1;
                 }
                 Err(_) => break,
@@ -157,16 +171,17 @@ pub fn parse_snirf(path: &str) -> Result<SNIRF, String> {
     }
 
     if nirs_entries.is_empty() {
-        return Err("No /nirs group found in file".to_string());
+        // Propagate as the dedicated NoNirsGroup variant via the From impl.
+        return Err(SnirfError::NoNirsGroup.into());
     }
 
     let snirf = SNIRF {
-        format_version: _format_version,
+        format_version,
         file_descriptor,
         nirs_entries,
     };
 
-    println!("Parsed SNIRF: {}", snirf);
+    println!("Parsed SNIRF: {snirf}");
 
     Ok(snirf)
 }
@@ -175,12 +190,12 @@ pub fn parse_snirf(path: &str) -> Result<SNIRF, String> {
 // NIRS entry
 // =============================================================================
 
-fn parse_nirs_entry(nirs: &Group) -> Result<NirsEntry, String> {
-    let metadata = parse_metadata(nirs)?;
-    let data_blocks = parse_data_blocks(nirs)?;
-    let probe = parse_probe(nirs)?;
-    let events = parse_events(nirs)?;
-    let auxiliaries = parse_auxiliaries(nirs)?;
+fn parse_nirs_entry(nirs: &Group) -> Result<NirsEntry> {
+    let metadata = parse_metadata(nirs).context("metaDataTags")?;
+    let data_blocks = parse_data_blocks(nirs).context("data blocks")?;
+    let probe = parse_probe(nirs).context("probe")?;
+    let events = parse_events(nirs).context("stim events")?;
+    let auxiliaries = parse_auxiliaries(nirs).context("auxiliaries")?;
 
     Ok(NirsEntry {
         metadata,
@@ -195,14 +210,14 @@ fn parse_nirs_entry(nirs: &Group) -> Result<NirsEntry, String> {
 // Metadata  —  nirs/metaDataTags/*
 // =============================================================================
 
-fn parse_metadata(nirs: &Group) -> Result<Vec<MetadataTag>, String> {
+fn parse_metadata(nirs: &Group) -> Result<Vec<MetadataTag>> {
     let group = nirs
         .group("metaDataTags")
-        .map_err(|e| format!("Failed to open metaDataTags: {}", e))?;
+        .context("Failed to open metaDataTags")?;
 
     let tags = group
         .member_names()
-        .map_err(|e| format!("Failed to list metaDataTags members: {}", e))?
+        .context("Failed to list metaDataTags members")?
         .into_iter()
         .filter_map(|name| {
             let ds = group.dataset(&name).ok()?;
@@ -228,7 +243,7 @@ fn resolve_positions(
     pos2d: Option<Array2<f64>>,
     pos3d: Option<Array2<f64>>,
     label: &str,
-) -> Result<(Array2<f64>, Array2<f64>), String> {
+) -> Result<(Array2<f64>, Array2<f64>)> {
     match (pos2d, pos3d) {
         (Some(d2), Some(d3)) => Ok((d2, d3)),
         (None, Some(d3)) => {
@@ -241,45 +256,35 @@ fn resolve_positions(
             d3.slice_mut(ndarray::s![.., 0..2]).assign(&d2);
             Ok((d2, d3))
         }
-        (None, None) => Err(format!(
-            "probe: neither {}Pos2D nor {}Pos3D found",
-            label, label
-        )),
+        (None, None) => bail!(
+            "neither {label}Pos2D nor {label}Pos3D found"
+        ),
     }
 }
 
-fn parse_probe(nirs: &Group) -> Result<Probe, String> {
-    let probe = nirs
-        .group("probe")
-        .map_err(|e| format!("Failed to open probe group: {}", e))?;
+fn parse_probe(nirs: &Group) -> Result<Probe> {
+    let probe = nirs.group("probe").context("probe group missing")?;
 
     // Wavelengths (required)
     let wavelengths: Vec<f64> = probe
         .dataset("wavelengths")
-        .map_err(|e| format!("probe/wavelengths: {}", e))?
+        .context("probe/wavelengths missing")?
         .read_raw()
-        .map_err(|e| format!("probe/wavelengths parse: {}", e))?;
+        .context("probe/wavelengths: read failed")?;
 
     let wavelength_emission: Option<Vec<f64>> = probe
         .dataset("wavelengthEmission")
         .and_then(|ds| ds.read_raw())
         .ok();
 
-    // SNIRF spec: either *Pos2D or *Pos3D is sufficient — only one is required.
-    // Whichever is absent is extrapolated:
-    //   3D-only  →  2D = columns (x, y) of 3D array
-    //   2D-only  →  3D = (x, y, z=0)
+    // SNIRF spec: either *Pos2D or *Pos3D is sufficient.
+    // resolve_positions extrapolates whichever is absent.
     let (s2d, s3d) = resolve_positions(
-        probe
-            .dataset("sourcePos2D")
-            .and_then(|ds| ds.read_2d())
-            .ok(),
-        probe
-            .dataset("sourcePos3D")
-            .and_then(|ds| ds.read_2d())
-            .ok(),
+        probe.dataset("sourcePos2D").and_then(|ds| ds.read_2d()).ok(),
+        probe.dataset("sourcePos3D").and_then(|ds| ds.read_2d()).ok(),
         "source",
-    )?;
+    )
+    .context("probe source positions")?;
 
     let (d2d, d3d) = resolve_positions(
         probe
@@ -291,7 +296,8 @@ fn parse_probe(nirs: &Group) -> Result<Probe, String> {
             .and_then(|ds| ds.read_2d())
             .ok(),
         "detector",
-    )?;
+    )
+    .context("probe detector positions")?;
 
     let row2 = |arr: &Array2<f64>, i: usize| Vector2::new(arr[[i, 0]], arr[[i, 1]]);
     let row3 = |arr: &Array2<f64>, i: usize| Vector3::new(arr[[i, 0]], arr[[i, 1]], arr[[i, 2]]);
@@ -314,7 +320,6 @@ fn parse_probe(nirs: &Group) -> Result<Probe, String> {
         })
         .collect();
 
-    // Optional fields
     let coordinate_system = probe
         .dataset("coordinateSystem")
         .ok()
@@ -344,7 +349,7 @@ fn parse_probe(nirs: &Group) -> Result<Probe, String> {
     })
 }
 
-fn parse_landmarks(probe: &Group) -> Result<Option<Vec<Landmark>>, String> {
+fn parse_landmarks(probe: &Group) -> Result<Option<Vec<Landmark>>> {
     let labels_ds = match probe.dataset("landmarkLabels") {
         Ok(ds) => ds,
         Err(_) => return Ok(None),
@@ -358,7 +363,7 @@ fn parse_landmarks(probe: &Group) -> Result<Option<Vec<Landmark>>, String> {
                 .read_raw::<hdf5::types::VarLenAscii>()
                 .map(|v| v.into_iter().map(|s| s.to_string()).collect())
         })
-        .map_err(|e| format!("probe/landmarkLabels parse: {}", e))?;
+        .context("probe/landmarkLabels: read failed")?;
 
     let pos2d: Option<Array2<f64>> = probe
         .dataset("landmarkPos2D")
@@ -378,9 +383,9 @@ fn parse_landmarks(probe: &Group) -> Result<Option<Vec<Landmark>>, String> {
             pos_2d: pos2d
                 .as_ref()
                 .and_then(|arr| (i < arr.nrows()).then(|| [arr[[i, 0]], arr[[i, 1]]])),
-            pos_3d: pos3d
-                .as_ref()
-                .and_then(|arr| (i < arr.nrows()).then(|| [arr[[i, 0]], arr[[i, 1]], arr[[i, 2]]])),
+            pos_3d: pos3d.as_ref().and_then(|arr| {
+                (i < arr.nrows()).then(|| [arr[[i, 0]], arr[[i, 1]], arr[[i, 2]]])
+            }),
         })
         .collect();
 
@@ -391,30 +396,33 @@ fn parse_landmarks(probe: &Group) -> Result<Option<Vec<Landmark>>, String> {
 // Data blocks  —  nirs/data{j}/*
 // =============================================================================
 
-fn parse_data_blocks(nirs: &Group) -> Result<Vec<DataBlock>, String> {
+fn parse_data_blocks(nirs: &Group) -> Result<Vec<DataBlock>> {
     (1..)
         .map_while(|j| nirs.group(&format!("data{j}")).ok().map(|g| (j, g)))
-        .map(|(j, g)| parse_data_block(&g, j))
+        .map(|(j, g)| parse_data_block(&g, j).with_context(|| format!("data{j}")))
         .collect()
 }
 
-fn parse_data_block(data: &Group, block_idx: usize) -> Result<DataBlock, String> {
+fn parse_data_block(data: &Group, block_idx: usize) -> Result<DataBlock> {
     let time: Vec<f64> = data
         .dataset("time")
-        .map_err(|e| format!("data{}/time: {}", block_idx, e))?
+        .context("time dataset missing")?
         .read_raw()
-        .map_err(|e| format!("data{}/time parse: {}", block_idx, e))?;
+        .context("time: read failed")?;
 
     let ts: Array2<f64> = data
         .dataset("dataTimeSeries")
-        .map_err(|e| format!("data{}/dataTimeSeries: {}", block_idx, e))?
+        .context("dataTimeSeries dataset missing")?
         .read_2d()
-        .map_err(|e| format!("data{}/dataTimeSeries parse: {}", block_idx, e))?;
+        .context("dataTimeSeries: read failed")?;
 
     let n_cols = ts.ncols();
     let measurements = (0..n_cols)
-        .map(|col| parse_measurement(data, block_idx, col, &ts))
-        .collect::<Result<Vec<Measurement>, String>>()?;
+        .map(|col| {
+            parse_measurement(data, block_idx, col, &ts)
+                .with_context(|| format!("measurementList{}", col + 1))
+        })
+        .collect::<Result<Vec<Measurement>>>()?;
 
     Ok(DataBlock { time, measurements })
 }
@@ -424,36 +432,23 @@ fn parse_measurement(
     block_idx: usize,
     col: usize,
     ts: &Array2<f64>,
-) -> Result<Measurement, String> {
+) -> Result<Measurement> {
     let ml_name = format!("measurementList{}", col + 1);
     let ml = data
         .group(&ml_name)
-        .map_err(|e| format!("data{}/{}: {}", block_idx, ml_name, e))?;
+        .with_context(|| format!("data{block_idx}/{ml_name}: group missing"))?;
 
-    let ctx = |field: &str| format!("data{}/{}/{}", block_idx, ml_name, field);
+    let read_required_i32 = |field: &str| -> Result<i32> {
+        let ds = ml
+            .dataset(field)
+            .with_context(|| format!("{field} dataset missing"))?;
+        read_i32(&ds).with_context(|| format!("{field}: read failed"))
+    };
 
-    let source_index = ml
-        .dataset("sourceIndex")
-        .map_err(|e| format!("{}: {}", ctx("sourceIndex"), e))
-        .and_then(|ds| read_i32(&ds).map_err(|e| format!("{}: {}", ctx("sourceIndex"), e)))?
-        as usize;
-
-    let detector_index = ml
-        .dataset("detectorIndex")
-        .map_err(|e| format!("{}: {}", ctx("detectorIndex"), e))
-        .and_then(|ds| read_i32(&ds).map_err(|e| format!("{}: {}", ctx("detectorIndex"), e)))?
-        as usize;
-
-    let wavelength_index = ml
-        .dataset("wavelengthIndex")
-        .map_err(|e| format!("{}: {}", ctx("wavelengthIndex"), e))
-        .and_then(|ds| read_i32(&ds).map_err(|e| format!("{}: {}", ctx("wavelengthIndex"), e)))?
-        as usize;
-
-    let data_type = ml
-        .dataset("dataType")
-        .map_err(|e| format!("{}: {}", ctx("dataType"), e))
-        .and_then(|ds| read_i32(&ds).map_err(|e| format!("{}: {}", ctx("dataType"), e)))?;
+    let source_index = read_required_i32("sourceIndex")? as usize;
+    let detector_index = read_required_i32("detectorIndex")? as usize;
+    let wavelength_index = read_required_i32("wavelengthIndex")? as usize;
+    let data_type = read_required_i32("dataType")?;
 
     let data_type_label = ml
         .dataset("dataTypeLabel")
@@ -492,8 +487,6 @@ fn parse_measurement(
         .ok()
         .and_then(|ds| ds.read_scalar::<f64>().ok());
 
-    let signal: Vec<f64> = ts.column(col).to_vec();
-
     Ok(Measurement {
         source_index,
         detector_index,
@@ -502,7 +495,7 @@ fn parse_measurement(
         data_type_label,
         data_type_index,
         data_unit,
-        data: signal,
+        data: ts.column(col).to_vec(),
         wavelength_actual,
         source_power,
         detector_gain,
@@ -513,81 +506,84 @@ fn parse_measurement(
 // =============================================================================
 // Events  —  nirs/stim{i}/*
 // =============================================================================
-fn parse_events(nirs: &Group) -> Result<Vec<Event>, String> {
+
+fn parse_events(nirs: &Group) -> Result<Vec<Event>> {
     (1..)
-        .map_while(|i| nirs.group(&format!("stim{i}")).ok().map(|stim| (i, stim)))
-        .map(|(i, stim)| -> Result<Event, String> {
-            let name = stim
-                .dataset("name")
-                .map_err(|e| format!("stim{i}/name: {e}"))
-                .and_then(|ds| read_string(&ds).map_err(|e| format!("stim{i}/name parse: {e}")))?;
-
-            let data: Array2<f64> = stim
-                .dataset("data")
-                .map_err(|e| format!("stim{i}/data: {e}"))?
-                .read_2d()
-                .map_err(|e| format!("stim{i}/data parse: {e}"))?;
-
-            let mut markers: Vec<EventMarker> = data
-                .rows()
-                .into_iter()
-                .filter(|row| row.len() >= 3)
-                .map(|row| EventMarker {
-                    onset: row[0],
-                    duration: row[1],
-                    value: row[2],
-                })
-                .collect();
-
-            markers.sort_unstable_by(|a, b| a.onset.partial_cmp(&b.onset).unwrap());
-            Ok(Event { name, markers })
+        .map_while(|i| nirs.group(&format!("stim{i}")).ok().map(|g| (i, g)))
+        .map(|(i, stim)| {
+            parse_event(&stim).with_context(|| format!("stim{i}"))
         })
         .collect()
+}
+
+fn parse_event(stim: &Group) -> Result<Event> {
+    let name_ds = stim.dataset("name").context("name dataset missing")?;
+    let name = read_string(&name_ds).context("name: read failed")?;
+
+    let data: Array2<f64> = stim
+        .dataset("data")
+        .context("data dataset missing")?
+        .read_2d()
+        .context("data: read failed")?;
+
+    let mut markers: Vec<EventMarker> = data
+        .rows()
+        .into_iter()
+        .filter(|row| row.len() >= 3)
+        .map(|row| EventMarker {
+            onset: row[0],
+            duration: row[1],
+            value: row[2],
+        })
+        .collect();
+
+    markers.sort_unstable_by(|a, b| a.onset.partial_cmp(&b.onset).unwrap());
+
+    Ok(Event { name, markers })
 }
 
 // =============================================================================
 // Auxiliaries  —  nirs/aux{i}/*
 // =============================================================================
-fn parse_auxiliaries(nirs: &Group) -> Result<Vec<AuxiliaryData>, String> {
+
+fn parse_auxiliaries(nirs: &Group) -> Result<Vec<AuxiliaryData>> {
     (1..)
-        .map_while(|i| nirs.group(&format!("aux{i}")).ok().map(|aux| (i, aux)))
-        .map(|(i, aux)| -> Result<AuxiliaryData, String> {
-            let name = aux
-                .dataset("name")
-                .map_err(|e| format!("aux{i}/name: {e}"))
-                .and_then(|ds| read_string(&ds).map_err(|e| format!("aux{i}/name parse: {e}")))?;
-
-            let unit = aux
-                .dataset("dataUnit")
-                .map_err(|e| format!("aux{i}/dataUnit: {e}"))
-                .and_then(|ds| {
-                    read_string(&ds).map_err(|e| format!("aux{i}/dataUnit parse: {e}"))
-                })?;
-
-            let data: Vec<f64> = aux
-                .dataset("dataTimeSeries")
-                .map_err(|e| format!("aux{i}/dataTimeSeries: {e}"))?
-                .read_raw()
-                .map_err(|e| format!("aux{i}/dataTimeSeries parse: {e}"))?;
-
-            let time: Vec<f64> = aux
-                .dataset("time")
-                .map_err(|e| format!("aux{i}/time: {e}"))?
-                .read_raw()
-                .map_err(|e| format!("aux{i}/time parse: {e}"))?;
-
-            let time_offset = aux
-                .dataset("timeOffset")
-                .ok()
-                .and_then(|ds| ds.read_scalar::<f64>().ok());
-
-            Ok(AuxiliaryData {
-                name,
-                unit,
-                data,
-                time,
-                time_offset,
-            })
+        .map_while(|i| nirs.group(&format!("aux{i}")).ok().map(|g| (i, g)))
+        .map(|(i, aux)| {
+            parse_auxiliary(&aux).with_context(|| format!("aux{i}"))
         })
         .collect()
+}
+
+fn parse_auxiliary(aux: &Group) -> Result<AuxiliaryData> {
+    let name_ds = aux.dataset("name").context("name dataset missing")?;
+    let name = read_string(&name_ds).context("name: read failed")?;
+
+    let unit_ds = aux.dataset("dataUnit").context("dataUnit dataset missing")?;
+    let unit = read_string(&unit_ds).context("dataUnit: read failed")?;
+
+    let data: Vec<f64> = aux
+        .dataset("dataTimeSeries")
+        .context("dataTimeSeries dataset missing")?
+        .read_raw()
+        .context("dataTimeSeries: read failed")?;
+
+    let time: Vec<f64> = aux
+        .dataset("time")
+        .context("time dataset missing")?
+        .read_raw()
+        .context("time: read failed")?;
+
+    let time_offset = aux
+        .dataset("timeOffset")
+        .ok()
+        .and_then(|ds| ds.read_scalar::<f64>().ok());
+
+    Ok(AuxiliaryData {
+        name,
+        unit,
+        data,
+        time,
+        time_offset,
+    })
 }

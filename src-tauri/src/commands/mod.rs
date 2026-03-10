@@ -24,7 +24,7 @@ pub fn load_snirf(
     state: tauri::State<AppState>,
     app: tauri::AppHandle,
 ) -> Result<SnirfSummary, String> {
-    let snirf = parse_snirf(&path)?;
+    let snirf = parse_snirf(&path).map_err(|e| format!("{e:#}"))?;
     let summary = SnirfSummary::from_snirf(&snirf);
     let optode_layout = OptodeLayout::from_snirf(&snirf);
 
