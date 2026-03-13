@@ -1,47 +1,47 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "NIRWizard",
-  "version": "0.1.0",
-  "identifier": "com.adamaske.nirwizard",
-  "build": {
-    "frontendDist": "../dist",
-    "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
-  },
-  "app": {
-    "windows": [
-      {
-        "title": "NIRWizard",
-        "width": 1600,
-        "height": 1000,
-        "resizable": true,
-        "fullscreen": false
-      }
-    ],
-    "security": {
-      "csp": null
-    }
-  },
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "resources": {
-      "dlls/hdf5.dll": ".",
-      "dlls/hdf5_hl.dll": ".",
-      "dlls/hdf5_cpp.dll": "."
+    "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+    "productName": "NIRWizard",
+    "version": "0.1.0",
+    "identifier": "com.adamaske.nirwizard",
+    "build": {
+        "frontendDist": "../dist",
+        "devUrl": "http://localhost:5173",
+        "beforeDevCommand": "npm run dev",
+        "beforeBuildCommand": "npm run build"
     },
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "windows": {
-      "nsis": {
-        "installerIcon": "icons/icon.ico"
-      }
+    "app": {
+        "windows": [
+            {
+                "title": "NIRWizard",
+                "width": 1600,
+                "height": 1000,
+                "resizable": true,
+                "fullscreen": false
+            }
+        ],
+        "security": {
+            "csp": null
+        }
+    },
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "resources": {
+            "dlls/hdf5.dll": ".",
+            "dlls/hdf5_hl.dll": ".",
+            "dlls/hdf5_cpp.dll": "."
+        },
+        "icon": [
+            "icons/32x32.png",
+            "icons/128x128.png",
+            "icons/128x128@2x.png",
+            "icons/icon.icns",
+            "icons/icon.ico"
+        ],
+        "windows": {
+            "nsis": {
+                "installerIcon": "icons/icon.ico"
+            }
+        }
     }
-  }
 }

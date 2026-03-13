@@ -8,29 +8,56 @@ use crate::domain::snirf::SNIRF;
 use crate::domain::voxel::VoxelVolume;
 
 pub struct AppState {
-    pub session: RwLock<Session>,
+    pub project: RwLock<ProjectState>,
+    pub nirs: RwLock<NirsState>,
+    pub anatomy: RwLock<AnatomyState>,
+    pub selection: RwLock<SelectionState>,
+    pub analysis: RwLock<AnalysisState>,
 }
-
 impl Default for AppState {
     fn default() -> Self {
         AppState {
-            session: RwLock::new(Session {
+            project: RwLock::new(ProjectState {
                 data_directory: None,
-                subject_anatomy: None,
-                voxel_volumes: HashMap::new(),
+            }),
+            nirs: RwLock::new(NirsState {
                 snirf: None,
                 optode_layout: None,
+            }),
+            anatomy: RwLock::new(AnatomyState {
+                subject_anatomy: None,
+                voxel_volumes: HashMap::new(),
+            }),
+            selection: RwLock::new(SelectionState {
                 selected_channels: Vec::new(),
             }),
+            analysis: RwLock::new(AnalysisState {}),
         }
     }
 }
 
-pub struct Session {
+pub struct ProjectState {
+    // Filepaths, workspace config, etc
     pub data_directory: Option<PathBuf>,
-    pub subject_anatomy: Option<SubjectAnatomy>,
-    pub voxel_volumes: HashMap<String, VoxelVolume>,
+}
+pub struct NirsState {
+    // SNIRF data, dervied views
     pub snirf: Option<SNIRF>,
     pub optode_layout: Option<OptodeLayout>,
+}
+
+pub struct AnatomyState {
+    // meshes, voxels, MRI registration
+    pub subject_anatomy: Option<SubjectAnatomy>,
+    pub voxel_volumes: HashMap<String, VoxelVolume>,
+}
+
+pub struct SelectionState {
+    // selected channels, time range, cursor, etc.
     pub selected_channels: Vec<usize>,
+}
+
+pub struct AnalysisState {
+    // results of processing, stats, etc.
+    // GLM, connectivity, DOT output?
 }

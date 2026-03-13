@@ -10,9 +10,9 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
-        .setup(setup::run)
+        .setup(setup::setup_app) // Automatically passes AppState ?
         .invoke_handler(tauri::generate_handler![
-            commands::load_snirf,
+            commands::import_snirf,
             commands::export_snirf,
             commands::get_snirf_summary,
             //

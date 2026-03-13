@@ -3,7 +3,9 @@ use crate::state::AppState;
 
 #[tauri::command]
 pub fn list_voxel_volumes(state: tauri::State<AppState>) -> Vec<String> {
-    let Ok(session) = state.session.read() else { return vec![] };
+    let Ok(session) = state.anatomy.read() else {
+        return vec![];
+    };
     session.voxel_volumes.keys().cloned().collect()
 }
 
@@ -12,7 +14,7 @@ pub fn get_voxel_volume_info(
     name: String,
     state: tauri::State<AppState>,
 ) -> Result<VoxelVolumeInfo, String> {
-    let session = state.session.read().map_err(|e| e.to_string())?;
+    let session = state.anatomy.read().map_err(|e| e.to_string())?;
     session
         .voxel_volumes
         .get(&name)
@@ -27,7 +29,7 @@ pub fn get_voxel_slice(
     index: usize,
     state: tauri::State<AppState>,
 ) -> Result<VoxelSlicePayload, String> {
-    let session = state.session.read().map_err(|e| e.to_string())?;
+    let session = state.anatomy.read().map_err(|e| e.to_string())?;
     let vol = session
         .voxel_volumes
         .get(&name)
@@ -70,5 +72,11 @@ pub fn get_voxel_slice(
         }
     };
 
-    Ok(VoxelSlicePayload { labels, width, height, axis: axis_char, index })
+    Ok(VoxelSlicePayload {
+        labels,
+        width,
+        height,
+        axis: axis_char,
+        index,
+    })
 }

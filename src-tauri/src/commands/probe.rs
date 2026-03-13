@@ -38,8 +38,8 @@ pub struct ProbeLayout {
 /// by the ChannelSelector frontend component.
 #[tauri::command]
 pub fn get_probe_layout(state: State<AppState>) -> Option<ProbeLayout> {
-    let session = state.session.read().ok()?;
-    let snirf = session.snirf.as_ref()?;
+    let nirs = state.nirs.read().ok()?;
+    let snirf = nirs.snirf.as_ref()?;
     let entry = snirf.nirs_entries.first()?;
     let view = NirsView::new(entry);
 
@@ -109,7 +109,7 @@ pub fn set_selected_channels(
     #[cfg(debug_assertions)]
     {
         let count = state
-            .session
+            .nirs
             .read()
             .ok()
             .and_then(|s| {
@@ -127,8 +127,8 @@ pub fn set_selected_channels(
         );
     }
 
-    if let Ok(mut session) = state.session.write() {
-        session.selected_channels = channel_ids.clone();
+    if let Ok(mut selection) = state.selection.write() {
+        selection.selected_channels = channel_ids.clone();
     }
 
     let _ = app.emit("channels-selected", ChannelsSelectedPayload { channel_ids });

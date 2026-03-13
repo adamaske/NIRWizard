@@ -37,7 +37,7 @@ pub struct TimeseriesPayload {
 
 #[tauri::command]
 pub fn get_timeseries_data(state: tauri::State<AppState>) -> Option<TimeseriesPayload> {
-    let session = state.session.read().ok()?;
+    let session = state.nirs.read().ok()?;
     let snirf = session.snirf.as_ref()?;
     let entry = snirf.nirs_entries.first()?;
     let view = NirsView::new(entry);
