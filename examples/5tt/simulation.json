@@ -1,0 +1,84 @@
+{
+    "_comment": [
+        "Complete MCX simulation input for fNIRS forward modelling.",
+        "Volume: 5tt_2mm.bin (43x43x43 voxels at 6mm — re-run downsample_5tt.py",
+        "after the fix to get a correct 2mm/128^3 volume).",
+        "Run with: mcx -f simulation.json",
+        "Output:   fluence volume (.jnii) + detected photon data (.jdat)"
+    ],
+
+    "Session": {
+        "ID": "fnirs_5tt",
+        "Photons": 1e7,
+        "RNGSeed": 1648335518,
+        "DoMismatch": 1,
+        "DoNormalize": 1,
+        "DoAutoThread": 1,
+        "OutputType": "fluence",
+        "OutputFormat": "jnii"
+    },
+
+    "Forward": {
+        "T0": 0,
+        "T1": 5e-9,
+        "Dt": 5e-10
+    },
+
+    "Domain": {
+        "VolumeFile": "C:/Users/adama/dev/NIRWizard/examples/5tt/5tt_2mm.bin",
+        "Dim": [43, 43, 43],
+        "VoxelSize": 6.0,
+        "BackgroundFlag": 0,
+        "Media": [
+            { "mua": 0.0, "mus": 0.0, "g": 1.0, "n": 1.0 },
+            { "mua": 0.019, "mus": 7.8, "g": 0.89, "n": 1.37 },
+            { "mua": 0.02, "mus": 9.0, "g": 0.89, "n": 1.37 },
+            { "mua": 0.004, "mus": 0.09, "g": 0.89, "n": 1.37 },
+            { "mua": 0.013, "mus": 8.6, "g": 0.89, "n": 1.37 },
+            { "mua": 0.017, "mus": 7.5, "g": 0.89, "n": 1.37 }
+        ],
+        "_MediaComment": [
+            "Index 0: Background/air",
+            "Index 1: White Matter  — mua=0.019, mus=7.8  /mm at 750nm",
+            "Index 2: Grey Matter   — mua=0.020, mus=9.0  /mm at 750nm",
+            "Index 3: CSF           — mua=0.004, mus=0.09 /mm at 750nm",
+            "Index 4: Skull         — mua=0.013, mus=8.6  /mm at 750nm",
+            "Index 5: Scalp         — mua=0.017, mus=7.5  /mm at 750nm",
+            "Source: Strangman et al. (2003), Custo et al. (2006)",
+            "Adjust mua/mus for your wavelength (690nm, 750nm, 830nm etc)"
+        ]
+    },
+
+    "Optode": {
+        "Source": {
+            "_comment": "Pencil beam source on scalp surface, pointing inward (-z direction)",
+            "Type": "pencil",
+            "Pos": [20, 24, 36],
+            "Dir": [0, 0, -1],
+            "Param1": [0, 0, 0, 0],
+            "Param2": [0, 0, 0, 0]
+        },
+        "Detector": [
+            {
+                "_comment": "Detector 1 — ~30mm from source (5 voxels x 6mm)",
+                "Pos": [25, 24, 36],
+                "R": 1.0
+            },
+            {
+                "_comment": "Detector 2 — ~30mm from source, opposite side",
+                "Pos": [15, 24, 36],
+                "R": 1.0
+            },
+            {
+                "_comment": "Detector 3 — ~30mm from source, perpendicular",
+                "Pos": [20, 29, 36],
+                "R": 1.0
+            },
+            {
+                "_comment": "Detector 4 — ~30mm from source, perpendicular other side",
+                "Pos": [20, 19, 36],
+                "R": 1.0
+            }
+        ]
+    }
+}
