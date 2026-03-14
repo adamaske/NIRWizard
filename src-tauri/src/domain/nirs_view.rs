@@ -173,7 +173,7 @@ impl NirsView<'_> {
     // Determine the signal kind for a measurement based on SNIRF dataType
     // // and dataTypeLabel fields, checks datatypelabel match, the constructs enum
     pub fn signal_kind(&self, measurement: &Measurement) -> SignalKind {
-        if measurement.data_type == 9999 {
+        if measurement.data_type == 99999 {
             let hemo = match measurement.data_type_label.to_lowercase().as_str() {
                 "hbo" | "dod hbo" => HemoType::HbO,
                 "hbr" | "dod hbr" => HemoType::HbR,
@@ -229,7 +229,7 @@ impl NirsView<'_> {
         };
 
         if let Some(m) = block.measurements.first() {
-            if m.data_type == 9999 {
+            if m.data_type == 99999 {
                 DataKind::ProcessedHemoglobin
             } else {
                 DataKind::RawCW

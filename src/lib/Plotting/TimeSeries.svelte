@@ -39,8 +39,8 @@
   const DOWNSAMPLE_TARGET = 2000; // max points per series sent to ECharts
 
   // Mirror CSS vars — ECharts config needs raw hex strings
-  const HBO_COLOR = "#2266ff"; // --color-hbo
-  const HBR_COLOR = "#ff2255"; // --color-hbr
+  const HBO_COLOR = "#ff2255"; // --color-hbo
+  const HBR_COLOR = "#2266ff"; // --color-hbr
   const CHART_BG = "#0a0a10"; // --chart-bg
   const CHART_AXIS = "#333340"; // --chart-axis
   const CHART_GRID = "#161620"; // --chart-grid

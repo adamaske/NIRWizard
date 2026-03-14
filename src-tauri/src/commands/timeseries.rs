@@ -62,21 +62,34 @@ pub fn get_timeseries_data(state: tauri::State<AppState>) -> Option<TimeseriesPa
                 }
             }
             DataKind::RawCW => {
-                let (w1, w2) = view.raw_wavelength_pair(ch).unwrap_or((&[], &[]));
-                let wl = &entry.probe.wavelengths;
+                // Look up each measurement's actual wavelength so we can assign
+                // the longer wavelength → series_a (HbO, red) and the shorter
+                // wavelength → series_b (HbR, blue), regardless of file order.
+                let m0 = view.channel_measurement(ch, 0);
+                let m1 = view.channel_measurement(ch, 1);
+                let wl0 = m0
+                    .and_then(|m| view.wavelength_nm(m.wavelength_index))
+                    .unwrap_or(0.0);
+                let wl1 = m1
+                    .and_then(|m| view.wavelength_nm(m.wavelength_index))
+                    .unwrap_or(0.0);
+                let d0 = view.channel_data(ch, 0).unwrap_or(&[]).to_vec();
+                let d1 = view.channel_data(ch, 1).unwrap_or(&[]).to_vec();
+
+                // Higher wavelength = HbO-sensitive (series_a / red)
+                let (hbo_data, hbo_wl, hbr_data, hbr_wl) = if wl0 >= wl1 {
+                    (d0, wl0, d1, wl1)
+                } else {
+                    (d1, wl1, d0, wl0)
+                };
+
                 ChannelPayload {
                     id: ch.id,
                     name: ch.name.clone(),
-                    series_a: w1.to_vec(),
-                    series_b: w2.to_vec(),
-                    series_a_label: wl
-                        .first()
-                        .map(|w| format!("{:.0} nm", w))
-                        .unwrap_or("λ1".into()),
-                    series_b_label: wl
-                        .get(1)
-                        .map(|w| format!("{:.0} nm", w))
-                        .unwrap_or("λ2".into()),
+                    series_a: hbo_data,
+                    series_b: hbr_data,
+                    series_a_label: format!("{:.0} nm", hbo_wl),
+                    series_b_label: format!("{:.0} nm", hbr_wl),
                 }
             }
             DataKind::Empty => ChannelPayload {

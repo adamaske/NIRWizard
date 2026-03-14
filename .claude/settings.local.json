@@ -6,7 +6,8 @@
       "Bash(cargo check:*)",
       "Bash(head:*)",
       "Bash(ls:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(cargo run:*)"
     ]
   }
 }

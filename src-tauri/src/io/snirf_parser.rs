@@ -134,8 +134,8 @@ pub fn parse_snirf(path: &str) -> Result<SNIRF, SnirfError> {
 fn parse_snirf_inner(path: &str) -> Result<SNIRF> {
     let file = File::open(path).with_context(|| format!("Failed to open '{path}'"))?;
 
-    //#[cfg(debug_assertions)]
-    //print_hdf5_tree(path, &file);
+    #[cfg(debug_assertions)]
+    print_hdf5_tree(path, &file);
 
     let format_version = file
         .dataset("formatVersion")
