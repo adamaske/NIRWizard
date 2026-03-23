@@ -53,7 +53,7 @@ NIRWizard/
 │   ├── src/
 │   │   ├── main.rs                     # Tauri entry; registers all commands
 │   │   ├── setup.rs                    # Tauri setup hook (env var auto-load)
-│   │   ├── state.rs                    # AppState (RwLock<Session>)
+│   │   ├── state.rs                    # AppState (split RwLocks: nirs, anatomy, selection, project, analysis)
 │   │   ├── domain/                     # Pure Rust data model (no Tauri deps)
 │   │   │   ├── snirf.rs                # SNIRF, NirsEntry, DataBlock, Measurement, Probe, Optode
 │   │   │   ├── nirs_view.rs            # NirsView / ChannelView — computed view over raw SNIRF data
@@ -70,7 +70,7 @@ NIRWizard/
 │   │   │   ├── mesh_importer.rs        # OBJ → Mesh (via tobj)
 │   │   │   └── anatomy_importer.rs     # MRI → SubjectAnatomy (via neuroformats)
 │   │   └── commands/                   # Tauri command handlers
-│   │       ├── mod.rs                  # load_snirf, export_snirf, get_snirf_summary (+ re-exports)
+│   │       ├── mod.rs                  # import_snirf, export_snirf, get_snirf_summary (+ re-exports)
 │   │       ├── probe.rs                # get_probe_layout, set_selected_channels
 │   │       ├── timeseries.rs           # get_timeseries_data, set_cursor_timepoint
 │   │       ├── scene.rs                # anatomy geometry/transform/opacity, optode layout 3D
@@ -93,7 +93,7 @@ NIRWizard/
 
 **All registered commands** (see `main.rs`):
 ```
-load_snirf, export_snirf, get_snirf_summary
+import_snirf, export_snirf, get_snirf_summary
 timeseries::get_timeseries_data, timeseries::set_cursor_timepoint
 probe::get_probe_layout, probe::set_selected_channels
 scene::get_anatomy_geometry, scene::set_anatomy_transform, scene::set_anatomy_opacity
@@ -116,7 +116,7 @@ voxel::list_voxel_volumes, voxel::get_voxel_volume_info, voxel::get_voxel_slice
 
 ### State Management
 
-- **Backend**: `AppState` wraps `RwLock<Session>`. `Session` holds the loaded SNIRF, optode layout, subject anatomy, voxel volumes, and selected channel indices.
+- **Backend**: `AppState` has separate `RwLock`-guarded sub-states: `nirs` (`NirsState` — SNIRF + optode layout), `anatomy` (`AnatomyState` — subject anatomy + voxel volumes), `selection` (`SelectionState` — selected channels), `project` (`ProjectState` — data directory), `analysis` (`AnalysisState` — stub).
 - **Frontend**: reactive Svelte `let` variables; components sync via `snirf-loaded` event on `onMount`. Layout sizes persisted to `localStorage` under key `nirwizard_layout`.
 
 ## Domain Model (Rust)

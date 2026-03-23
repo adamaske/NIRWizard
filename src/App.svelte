@@ -9,7 +9,7 @@
 
     // NIRS
     import Info from "./lib/NIRS/Info.svelte";
-
+    
     // Plotting
     import TimeSeries from "./lib/Plotting/TimeSeries.svelte";
     import Spectrogram from "./lib/Plotting/Spectrogram.svelte";

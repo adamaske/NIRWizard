@@ -95,23 +95,37 @@
             </section>
 
             <!-- Wavelengths -->
+            {#if summary.wavelengths?.length > 0}
             <section class="card">
                 <h2 class="card-title">Wavelengths</h2>
                 <div class="grid-2col">
+                    {#each summary.wavelengths as wl}
                     <div class="kv">
-                        <span class="key">HbO</span>
-                        <span class="value wavelength"
-                            >{summary.hbo_wavelength} nm</span
-                        >
+                        <span class="value wavelength">{wl} nm</span>
                     </div>
-                    <div class="kv">
-                        <span class="key">HbR</span>
-                        <span class="value wavelength"
-                            >{summary.hbr_wavelength} nm</span
-                        >
-                    </div>
+                    {/each}
                 </div>
             </section>
+            {/if}
+
+            <!-- Data Blocks -->
+            {#if summary.data_blocks?.length > 0}
+            <section class="card">
+                <h2 class="card-title">
+                    Data Blocks
+                    <span class="card-badge">{summary.data_blocks.length}</span>
+                </h2>
+                <div class="block-list">
+                    {#each summary.data_blocks as blk}
+                    <div class="block-row">
+                        <span class="block-index">#{blk.index}</span>
+                        <span class="block-kind">{blk.data_kind === "raw_cw" ? "Raw" : blk.data_kind === "optical_density" ? "OD" : blk.data_kind === "processed_hemoglobin" ? "Hb" : blk.data_kind}</span>
+                        <span class="block-detail">{blk.channels} ch · {blk.duration.toFixed(1)} s · {blk.sampling_rate.toFixed(1)} Hz</span>
+                    </div>
+                    {/each}
+                </div>
+            </section>
+            {/if}
 
             <!-- Events -->
             <section class="card">
@@ -343,5 +357,41 @@
         color: var(--text-faint);
         margin: 0;
         font-style: italic;
+    }
+
+    .block-list {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .block-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 10px;
+        background: var(--bg-base);
+        border: 1px solid var(--border-subtle);
+        border-radius: 5px;
+    }
+
+    .block-index {
+        font-size: 11px;
+        color: var(--text-faint);
+        font-variant-numeric: tabular-nums;
+        min-width: 18px;
+    }
+
+    .block-kind {
+        font-size: 12px;
+        color: var(--text-primary);
+        font-family: "Cascadia Code", "Consolas", monospace;
+        min-width: 36px;
+    }
+
+    .block-detail {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
     }
 </style>

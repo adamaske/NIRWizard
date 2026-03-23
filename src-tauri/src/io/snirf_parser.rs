@@ -3,7 +3,10 @@ use hdf5::{File, Group};
 use nalgebra::{Vector2, Vector3};
 use ndarray::Array2;
 
-use crate::domain::{SnirfError, *};
+use crate::{
+    commands::SnirfSummary,
+    domain::{SnirfError, *},
+};
 
 // =============================================================================
 // HDF5 tree inspector (debug builds only)
@@ -139,8 +142,9 @@ fn parse_snirf_inner(path: &str) -> Result<SNIRF> {
 
     let format_version = file
         .dataset("formatVersion")
-        .context("Missing required dataset 'formatVersion'")?;
-    let format_version = read_string(&format_version).context("formatVersion: read failed")?;
+        .ok()
+        .and_then(|ds| read_string(&ds).ok())
+        .unwrap_or_else(|| "1.0".to_string());
 
     let file_descriptor = FileDescriptor {
         filepath: path.to_string(),
@@ -399,10 +403,39 @@ fn parse_landmarks(probe: &Group) -> Result<Option<Vec<Landmark>>> {
 // =============================================================================
 
 fn parse_data_blocks(nirs: &Group) -> Result<Vec<DataBlock>> {
-    (1..)
+    let mut blocks: Vec<DataBlock> = (1..)
         .map_while(|j| nirs.group(&format!("data{j}")).ok().map(|g| (j, g)))
         .map(|(j, g)| parse_data_block(&g, j).with_context(|| format!("data{j}")))
-        .collect()
+        .collect::<Result<_>>()?;
+
+    // Second pass: fill in missing wavelength_index values by matching column
+    // position against the first block that has a complete set of indices.
+    // Processed / OD blocks derived from the same raw data share the same
+    // channel ordering, so positional cross-referencing is reliable.
+    let ref_indices: Option<Vec<Option<usize>>> = blocks
+        .iter()
+        .find(|b| b.measurements.iter().all(|m| m.wavelength_index.is_some()))
+        .map(|b| b.measurements.iter().map(|m| m.wavelength_index).collect());
+
+    if let Some(ref_indices) = ref_indices {
+        for block in &mut blocks {
+            // Only fill in partial gaps — if every measurement in a block already
+            // lacks wavelengthIndex the block is structured differently (e.g.
+            // concentration HbO/HbR) and cross-referencing would wrongly change
+            // its DataKind classification.
+            let has_any = block.measurements.iter().any(|m| m.wavelength_index.is_some());
+            if !has_any {
+                continue;
+            }
+            for (col, m) in block.measurements.iter_mut().enumerate() {
+                if m.wavelength_index.is_none() {
+                    m.wavelength_index = ref_indices.get(col).copied().flatten();
+                }
+            }
+        }
+    }
+
+    Ok(blocks)
 }
 
 fn parse_data_block(data: &Group, block_idx: usize) -> Result<DataBlock> {
@@ -449,7 +482,14 @@ fn parse_measurement(
 
     let source_index = read_required_i32("sourceIndex")? as usize;
     let detector_index = read_required_i32("detectorIndex")? as usize;
-    let wavelength_index = read_required_i32("wavelengthIndex")? as usize;
+    // wavelengthIndex is absent for processed/OD blocks; do NOT use read_required_i32
+    // because the HDF5 C library will abort the process if a dataset is opened that
+    // doesn't exist via certain code paths.  Use .ok() so we get None gracefully.
+    let wavelength_index: Option<usize> = ml
+        .dataset("wavelengthIndex")
+        .ok()
+        .and_then(|ds| read_i32(&ds).ok())
+        .map(|v| v as usize);
     let data_type = read_required_i32("dataType")?;
 
     let data_type_label = ml

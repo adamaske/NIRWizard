@@ -110,6 +110,123 @@ impl<'a> NirsView<'a> {
         self.time().len()
     }
 
+    // ── Block-indexed accessors ───────────────────────────────────────────────
+
+    pub fn block_count(&self) -> usize {
+        self.entry.data_blocks.len()
+    }
+
+    pub fn block_at(&self, idx: usize) -> Option<&DataBlock> {
+        self.entry.data_blocks.get(idx)
+    }
+
+    pub fn channels_at(&self, idx: usize) -> &[ChannelView] {
+        self.channels.get(idx).map(|v| v.as_slice()).unwrap_or(&[])
+    }
+
+    pub fn time_at(&self, idx: usize) -> &[f64] {
+        self.entry
+            .data_blocks
+            .get(idx)
+            .map(|b| b.time.as_slice())
+            .unwrap_or(&[])
+    }
+
+    pub fn sampling_rate_at(&self, idx: usize) -> f64 {
+        let t = self.time_at(idx);
+        if t.len() >= 2 { 1.0 / (t[1] - t[0]) } else { 0.0 }
+    }
+
+    pub fn duration_at(&self, idx: usize) -> f64 {
+        self.time_at(idx).last().copied().unwrap_or(0.0)
+    }
+
+    pub fn data_kind_at(&self, idx: usize) -> DataKind {
+        let block = match self.block_at(idx) {
+            Some(b) => b,
+            None => return DataKind::Empty,
+        };
+        if let Some(m) = block.measurements.first() {
+            match m.data_type {
+                99999 if m.wavelength_index.is_some() => DataKind::OpticalDensity,
+                99999 => DataKind::ProcessedHemoglobin,
+                _ => DataKind::RawCW,
+            }
+        } else {
+            DataKind::Empty
+        }
+    }
+
+    pub fn channel_data_at(
+        &self,
+        block_idx: usize,
+        channel: &ChannelView,
+        wavelength_position: usize,
+    ) -> Option<&[f64]> {
+        let block = self.block_at(block_idx)?;
+        let &meas_idx = channel.measurement_indices.get(wavelength_position)?;
+        Some(&block.measurements[meas_idx].data)
+    }
+
+    pub fn channel_measurement_at(
+        &self,
+        block_idx: usize,
+        channel: &ChannelView,
+        wavelength_position: usize,
+    ) -> Option<&Measurement> {
+        let block = self.block_at(block_idx)?;
+        let &meas_idx = channel.measurement_indices.get(wavelength_position)?;
+        Some(&block.measurements[meas_idx])
+    }
+
+    /// For blocks that store processed data without wavelength labels, returns the
+    /// measurement position (0 or 1) within a channel that corresponds to the
+    /// HbO-sensitive (longer) wavelength, by cross-referencing the first block
+    /// that has wavelength indices.  Returns `None` if undeterminable.
+    pub fn hbo_position_from_reference(&self) -> Option<usize> {
+        let ref_block = self
+            .entry
+            .data_blocks
+            .iter()
+            .find(|b| b.measurements.iter().any(|m| m.wavelength_index.is_some()))?;
+
+        let ref_channels = build_channel_views(ref_block);
+        let ref_ch = ref_channels.first()?;
+
+        let wl_at = |pos: usize| -> Option<f64> {
+            let &meas_idx = ref_ch.measurement_indices.get(pos)?;
+            let m = ref_block.measurements.get(meas_idx)?;
+            m.wavelength_index.and_then(|i| self.wavelength_nm(i))
+        };
+
+        let wl0 = wl_at(0)?;
+        let wl1 = wl_at(1)?;
+        // HbO always has the longer wavelength.
+        Some(if wl0 >= wl1 { 0 } else { 1 })
+    }
+
+    pub fn hbo_data_at(&self, block_idx: usize, channel: &ChannelView) -> Option<&[f64]> {
+        let block = self.block_at(block_idx)?;
+        channel.measurement_indices.iter().find_map(|&idx| {
+            let m = &block.measurements[idx];
+            match self.signal_kind(m) {
+                SignalKind::Hemoglobin(HemoType::HbO) => Some(m.data.as_slice()),
+                _ => None,
+            }
+        })
+    }
+
+    pub fn hbr_data_at(&self, block_idx: usize, channel: &ChannelView) -> Option<&[f64]> {
+        let block = self.block_at(block_idx)?;
+        channel.measurement_indices.iter().find_map(|&idx| {
+            let m = &block.measurements[idx];
+            match self.signal_kind(m) {
+                SignalKind::Hemoglobin(HemoType::HbR) => Some(m.data.as_slice()),
+                _ => None,
+            }
+        })
+    }
+
     // Channel data access
     // Gets the timeseires data from a channelview based on its
     // indicies into the measurements list
@@ -182,8 +299,9 @@ impl NirsView<'_> {
             };
             SignalKind::Hemoglobin(hemo)
         } else {
-            let wl = self
-                .wavelength_nm(measurement.wavelength_index)
+            let wl = measurement
+                .wavelength_index
+                .and_then(|i| self.wavelength_nm(i))
                 .unwrap_or(0.0);
             SignalKind::RawAtWavelength(wl)
         }
@@ -223,26 +341,19 @@ impl NirsView<'_> {
     }
 
     pub fn data_kind(&self) -> DataKind {
-        let block = match self.block0() {
-            Some(b) => b,
-            None => return DataKind::Empty,
-        };
-
-        if let Some(m) = block.measurements.first() {
-            if m.data_type == 99999 {
-                DataKind::ProcessedHemoglobin
-            } else {
-                DataKind::RawCW
-            }
-        } else {
-            DataKind::Empty
-        }
+        self.data_kind_at(0)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DataKind {
+    /// Raw CW amplitude, data_type = 1. Two series per channel by wavelength.
     RawCW,
+    /// Optical density (dOD), data_type = 99999 with wavelengthIndex present.
+    /// Two series per channel by wavelength, same rendering path as RawCW.
+    OpticalDensity,
+    /// Processed haemoglobin concentration, data_type = 99999, no wavelengthIndex.
+    /// Two series per channel: HbO and HbR (by label or position).
     ProcessedHemoglobin,
     Empty,
 }

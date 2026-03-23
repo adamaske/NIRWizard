@@ -14,6 +14,7 @@ pub struct ChannelPayload {
     pub series_a_label: String,
     pub series_b_label: String,
 }
+
 #[derive(Serialize, Debug)]
 pub struct EventMarkerPayload {
     pub onset: f64,
@@ -27,31 +28,66 @@ pub struct EventPayload {
     pub markers: Vec<EventMarkerPayload>,
 }
 
+/// Lightweight descriptor for one data block, included in every payload so the
+/// frontend can build its block-selector without a separate round-trip.
+#[derive(Serialize, Debug)]
+pub struct BlockMeta {
+    pub index: usize,
+    pub data_kind: String,
+    pub channels: usize,
+}
+
 #[derive(Serialize, Debug)]
 pub struct TimeseriesPayload {
     pub time: Vec<f64>,
     pub data_kind: String,
     pub channels: Vec<ChannelPayload>,
     pub events: Vec<EventPayload>,
+    /// Which block this payload was built from.
+    pub block_index: usize,
+    /// All available blocks in the file (for populating the block selector).
+    pub available_blocks: Vec<BlockMeta>,
 }
 
 #[tauri::command]
-pub fn get_timeseries_data(state: tauri::State<AppState>) -> Option<TimeseriesPayload> {
+pub fn get_timeseries_data(
+    block_index: Option<usize>,
+    state: tauri::State<AppState>,
+) -> Option<TimeseriesPayload> {
     let session = state.nirs.read().ok()?;
     let snirf = session.snirf.as_ref()?;
     let entry = snirf.nirs_entries.first()?;
     let view = NirsView::new(entry);
 
-    let time = view.time().to_vec();
-    let data_kind = view.data_kind();
+    // Clamp to valid range
+    let block_idx = block_index
+        .unwrap_or(0)
+        .min(view.block_count().saturating_sub(1));
+
+    let time = view.time_at(block_idx).to_vec();
+    let data_kind = view.data_kind_at(block_idx);
 
     let channels: Vec<ChannelPayload> = view
-        .channels_block0()
+        .channels_at(block_idx)
         .iter()
         .map(|ch| match data_kind {
             DataKind::ProcessedHemoglobin => {
-                let hbo = view.hbo_data(ch).unwrap_or(&[]).to_vec();
-                let hbr = view.hbr_data(ch).unwrap_or(&[]).to_vec();
+                // Try label-based HbO/HbR lookup first (labelled files).
+                // Fall back to positional for files that store processed data with
+                // empty labels: derive HbO position from the wavelength ordering in
+                // the reference (OD/raw) block so we assign the correct series.
+                let hbo_pos = view.hbo_position_from_reference().unwrap_or(0);
+                let hbr_pos = 1 - hbo_pos;
+                let hbo = view
+                    .hbo_data_at(block_idx, ch)
+                    .or_else(|| view.channel_data_at(block_idx, ch, hbo_pos))
+                    .unwrap_or(&[])
+                    .to_vec();
+                let hbr = view
+                    .hbr_data_at(block_idx, ch)
+                    .or_else(|| view.channel_data_at(block_idx, ch, hbr_pos))
+                    .unwrap_or(&[])
+                    .to_vec();
                 ChannelPayload {
                     id: ch.id,
                     name: ch.name.clone(),
@@ -61,35 +97,38 @@ pub fn get_timeseries_data(state: tauri::State<AppState>) -> Option<TimeseriesPa
                     series_b_label: "HbR".into(),
                 }
             }
-            DataKind::RawCW => {
-                // Look up each measurement's actual wavelength so we can assign
-                // the longer wavelength → series_a (HbO, red) and the shorter
-                // wavelength → series_b (HbR, blue), regardless of file order.
-                let m0 = view.channel_measurement(ch, 0);
-                let m1 = view.channel_measurement(ch, 1);
+            // RawCW and OpticalDensity both carry two series per wavelength.
+            // HbO always has the longer wavelength → series_a (red).
+            // HbR always has the shorter wavelength → series_b (blue).
+            DataKind::RawCW | DataKind::OpticalDensity => {
+                let m0 = view.channel_measurement_at(block_idx, ch, 0);
+                let m1 = view.channel_measurement_at(block_idx, ch, 1);
                 let wl0 = m0
-                    .and_then(|m| view.wavelength_nm(m.wavelength_index))
+                    .and_then(|m| m.wavelength_index)
+                    .and_then(|i| view.wavelength_nm(i))
                     .unwrap_or(0.0);
                 let wl1 = m1
-                    .and_then(|m| view.wavelength_nm(m.wavelength_index))
+                    .and_then(|m| m.wavelength_index)
+                    .and_then(|i| view.wavelength_nm(i))
                     .unwrap_or(0.0);
-                let d0 = view.channel_data(ch, 0).unwrap_or(&[]).to_vec();
-                let d1 = view.channel_data(ch, 1).unwrap_or(&[]).to_vec();
+                let d0 = view.channel_data_at(block_idx, ch, 0).unwrap_or(&[]).to_vec();
+                let d1 = view.channel_data_at(block_idx, ch, 1).unwrap_or(&[]).to_vec();
 
-                // Higher wavelength = HbO-sensitive (series_a / red)
-                let (hbo_data, hbo_wl, hbr_data, hbr_wl) = if wl0 >= wl1 {
+                // Longer wavelength = HbO-sensitive (series_a / red)
+                let (a_data, a_wl, b_data, b_wl) = if wl0 >= wl1 {
                     (d0, wl0, d1, wl1)
                 } else {
                     (d1, wl1, d0, wl0)
                 };
 
+                let prefix = if data_kind == DataKind::OpticalDensity { "dOD " } else { "" };
                 ChannelPayload {
                     id: ch.id,
                     name: ch.name.clone(),
-                    series_a: hbo_data,
-                    series_b: hbr_data,
-                    series_a_label: format!("{:.0} nm", hbo_wl),
-                    series_b_label: format!("{:.0} nm", hbr_wl),
+                    series_a: a_data,
+                    series_b: b_data,
+                    series_a_label: format!("{}{:.0} nm", prefix, a_wl),
+                    series_b_label: format!("{}{:.0} nm", prefix, b_wl),
                 }
             }
             DataKind::Empty => ChannelPayload {
@@ -122,15 +161,31 @@ pub fn get_timeseries_data(state: tauri::State<AppState>) -> Option<TimeseriesPa
 
     let kind_str = match data_kind {
         DataKind::RawCW => "raw_cw",
+        DataKind::OpticalDensity => "optical_density",
         DataKind::ProcessedHemoglobin => "processed_hemoglobin",
         DataKind::Empty => "empty",
     };
+
+    let available_blocks: Vec<BlockMeta> = (0..view.block_count())
+        .map(|i| BlockMeta {
+            index: i,
+            data_kind: match view.data_kind_at(i) {
+                DataKind::RawCW => "raw_cw".to_string(),
+                DataKind::OpticalDensity => "optical_density".to_string(),
+                DataKind::ProcessedHemoglobin => "processed_hemoglobin".to_string(),
+                DataKind::Empty => "empty".to_string(),
+            },
+            channels: view.channels_at(i).len(),
+        })
+        .collect();
 
     Some(TimeseriesPayload {
         time,
         data_kind: kind_str.to_string(),
         channels,
-        events: events,
+        events,
+        block_index: block_idx,
+        available_blocks,
     })
 }
 

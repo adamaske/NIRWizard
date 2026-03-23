@@ -40,7 +40,10 @@ pub struct MetadataTag {
 pub struct Measurement {
     pub source_index: usize,
     pub detector_index: usize,
-    pub wavelength_index: usize,
+    /// 1-based index into `Probe.wavelengths`. `None` for processed blocks
+    /// (data_type = 99999 / OD) that omit the `wavelengthIndex` dataset.
+    /// The parser fills this in via cross-reference from a raw block when possible.
+    pub wavelength_index: Option<usize>,
 
     pub data_type: i32,          // 1 = CW, 99999=processed
     pub data_type_label: String, // i.e "HbO", "HbR", "OD Hbo"

@@ -20,12 +20,14 @@
   let unlistenSnirf;
   let unlistenChannels;
 
-  // Cached full timeseries payload (fetched once per file load)
+  // Cached full timeseries payload (fetched once per file load / block switch)
   let allData = null;
   // Currently selected channel IDs
   let selectedIds = [];
   // Display mode
   let stacked = true;
+  // Selected data block index
+  let selectedBlock = 0;
 
   // Event marker state
   let eventTypes = []; // { name, color, visible }
@@ -277,15 +279,28 @@
     chart.resize();
   }
 
-  async function fetchAndCacheData() {
-    const payload = await invoke("get_timeseries_data");
+  function blockLabel(block) {
+    if (block.data_kind === "raw_cw") return "Raw";
+    if (block.data_kind === "optical_density") return "OD";
+    if (block.data_kind === "processed_hemoglobin") return "Hb";
+    return `Block ${block.index}`;
+  }
+
+  async function fetchAndCacheData(blockIdx = selectedBlock) {
+    const payload = await invoke("get_timeseries_data", { blockIndex: blockIdx });
     if (payload) {
+      selectedBlock = payload.block_index;
       allData = payload;
       syncEventTypes(payload.events || []);
       selectedIds = payload.channels.map((ch) => ch.id);
       if (payload.time.length > 0) { maxTime = payload.time[payload.time.length - 1]; cursorInputValue = "0"; }
       updateChart();
     }
+  }
+
+  async function selectBlock(idx) {
+    if (idx === selectedBlock) return;
+    await fetchAndCacheData(idx);
   }
 
   function onToggle(mode) { stacked = mode; updateChart(); }
@@ -312,6 +327,18 @@
     <button class="toggle-btn" class:active={stacked} on:click={() => onToggle(true)}>Stacked</button>
     <button class="toggle-btn" class:active={!stacked} on:click={() => onToggle(false)}>Unstacked</button>
     <span class="channel-count">{selectedIds.length} channel{selectedIds.length !== 1 ? "s" : ""} plotted</span>
+
+    {#if allData?.available_blocks?.length > 1}
+      <div class="toolbar-sep"></div>
+      {#each allData.available_blocks as block}
+        <button
+          class="toggle-btn block-btn"
+          class:active={selectedBlock === block.index}
+          on:click={() => selectBlock(block.index)}
+          title="{block.channels} ch"
+        >{blockLabel(block)}</button>
+      {/each}
+    {/if}
 
     {#if eventTypes.length > 0}
       <div class="toolbar-sep"></div>
@@ -379,6 +406,7 @@
 
   .toggle-btn:hover { background: var(--bg-overlay); color: var(--text-secondary); }
   .toggle-btn.active { background: var(--bg-overlay); color: var(--text-primary); border-color: var(--border-strong); }
+  .block-btn.active { border-color: var(--accent-green); color: var(--accent-green); }
 
   .channel-count { margin-left: 12px; font-size: 11px; color: var(--text-muted); }
 
