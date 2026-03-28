@@ -1,9 +1,24 @@
 <script>
     import { invoke } from "@tauri-apps/api/core";
+    import { listen } from "@tauri-apps/api/event";
     import { open } from "@tauri-apps/plugin-dialog";
+    import { onMount, onDestroy } from "svelte";
 
     /** @type {import('../../types').SnirfSummary | null} */
     export let summary = null;
+
+    let activeBlock = 0;
+    let unlistenSnirf;
+
+    async function selectBlock(index) {
+        activeBlock = index;
+        await invoke("set_active_block", { index });
+    }
+
+    onMount(async () => {
+        unlistenSnirf = await listen("snirf-loaded", () => { activeBlock = 0; });
+    });
+    onDestroy(() => { unlistenSnirf?.(); });
 
     async function loadSnirf() {
         const path = await open({
@@ -117,7 +132,8 @@
                 </h2>
                 <div class="block-list">
                     {#each summary.data_blocks as blk}
-                    <div class="block-row">
+                    <div class="block-row" class:active={activeBlock === blk.index} on:click={() => selectBlock(blk.index)}>
+                        <input type="radio" name="active-block" checked={activeBlock === blk.index} on:change={() => selectBlock(blk.index)} />
                         <span class="block-index">#{blk.index}</span>
                         <span class="block-kind">{blk.data_kind === "raw_cw" ? "Raw" : blk.data_kind === "optical_density" ? "OD" : blk.data_kind === "processed_hemoglobin" ? "Hb" : blk.data_kind}</span>
                         <span class="block-detail">{blk.channels} ch · {blk.duration.toFixed(1)} s · {blk.sampling_rate.toFixed(1)} Hz</span>
@@ -373,7 +389,12 @@
         background: var(--bg-base);
         border: 1px solid var(--border-subtle);
         border-radius: 5px;
+        cursor: pointer;
+        user-select: none;
     }
+    .block-row:hover { border-color: var(--border-default); }
+    .block-row.active { border-color: var(--accent-green); }
+    .block-row input[type="radio"] { accent-color: var(--accent-green); cursor: pointer; }
 
     .block-index {
         font-size: 11px;

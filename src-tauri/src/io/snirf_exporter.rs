@@ -1,6 +1,6 @@
 use crate::domain::*;
 use hdf5::File;
-use ndarray::Array2;
+use ndarray16::Array2;
 
 // =============================================================================
 // Low-level write helpers — symmetric counterparts to the parser's read helpers

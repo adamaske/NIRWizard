@@ -28,12 +28,16 @@ tauri = { version = "2.10.0", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 nalgebra = { version = "0.34", features = ["serde-serialize"] }
-hdf5 = { package = "hdf5-metno", version = "0.12.3"}
+hdf5 = { package = "hdf5-metno", version = "0.12.3" }
 ndarray = "0.15"
 ndarray16 = { package = "ndarray", version = "0.16" }
 uuid = { version = "1.0", features = ["v4", "fast-rng", "macro-diagnostics"] }
-tobj = { "version" = "4.0.3"}
-kiddo = { "version" = "5.2.4"}
+tobj = { "version" = "4.0.3" }
+kiddo = { "version" = "5.2.4" }
 bvh = { "version" = "0.12.0" }
 parry3d = { "version" = "0.26.0" }
 neuroformats = "0.3"
+rustfft = "6.4"
+realfft = "3"
+fcwt = "0.1"
+num-complex = "0.4"

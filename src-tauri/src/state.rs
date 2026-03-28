@@ -30,6 +30,7 @@ impl Default for AppState {
             }),
             selection: RwLock::new(SelectionState {
                 selected_channels: Vec::new(),
+                active_block: 0,
             }),
             analysis: RwLock::new(AnalysisState {}),
         }
@@ -55,6 +56,7 @@ pub struct AnatomyState {
 pub struct SelectionState {
     // selected channels, time range, cursor, etc.
     pub selected_channels: Vec<usize>,
+    pub active_block: usize,
 }
 
 pub struct AnalysisState {

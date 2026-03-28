@@ -19,6 +19,7 @@
   let resizeObserver;
   let unlistenSnirf;
   let unlistenChannels;
+  let unlistenBlock;
 
   // Cached full timeseries payload (fetched once per file load / block switch)
   let allData = null;
@@ -26,8 +27,6 @@
   let selectedIds = [];
   // Display mode
   let stacked = true;
-  // Selected data block index
-  let selectedBlock = 0;
 
   // Event marker state
   let eventTypes = []; // { name, color, visible }
@@ -44,6 +43,19 @@
   const HBO_COLOR = "#ff2255"; // --color-hbo
   const HBR_COLOR = "#2266ff"; // --color-hbr
   const CHART_BG = "#0a0a10"; // --chart-bg
+  const TOOLBOX_BASE = {
+    itemSize: 14,
+    feature: {
+      dataZoom: { yAxisIndex: "all", title: { zoom: "Box zoom", back: "Undo zoom" } },
+      restore: { title: "Reset" },
+    },
+    iconStyle: { borderColor: "#a0a0b8" },
+    emphasis: { iconStyle: { borderColor: "#ffffff" } },
+  };
+  // Stacked: sit below the legend row (legend is top:8, ~20px tall)
+  const TOOLBOX_STACKED = { ...TOOLBOX_BASE, right: 8, top: 30 };
+  // Unstacked: sit above the first grid (grids start at top:38)
+  const TOOLBOX_UNSTACKED = { ...TOOLBOX_BASE, right: 8, top: 4 };
   const CHART_AXIS = "#333340"; // --chart-axis
   const CHART_GRID = "#161620"; // --chart-grid
 
@@ -237,13 +249,14 @@
     chart.setOption({
       backgroundColor: "#0d0d18", animation: false, title: { show: false },
       tooltip: manyChannels ? { show: false } : { trigger: "axis", axisPointer: { type: "cross" } },
-      legend: { show: true, type: "scroll", data: legendData, textStyle: { color: "#9090a0" }, top: 8 },
-      grid: [{ left: 70, right: 30, top: 50, bottom: 40 }],
+      legend: { show: true, type: "scroll", data: legendData, textStyle: { color: "#9090a0" }, top: 8, right: 100 },
+      grid: [{ left: 70, right: 30, top: 58, bottom: 40 }],
       xAxis: [{ type: "value", gridIndex: 0, name: "Time (s)", nameLocation: "middle", nameGap: 30, axisLabel: { color: "#9090a0" }, axisLine: { lineStyle: { color: CHART_AXIS } } }],
       yAxis: [{ type: "value", gridIndex: 0, name: "ΔC (M)", nameLocation: "middle", nameGap: 50, axisLabel: { color: "#9090a0", formatter: (val) => val.toExponential(1) }, axisLine: { lineStyle: { color: CHART_AXIS } }, splitLine: { lineStyle: { color: CHART_GRID } } }],
       dataZoom: [{ type: "inside", xAxisIndex: 0 }],
+      toolbox: TOOLBOX_STACKED,
       series,
-    }, true);
+    }, { replaceMerge: ["series", "xAxis", "yAxis", "grid"] });
     chart.resize();
   }
 
@@ -256,8 +269,8 @@
     const grids = [], xAxes = [], yAxes = [], series = [], xAxisIndices = [];
     const manyChannels = n > 20;
     channels.forEach((ch, i) => {
-      const gridHeight = needsScroll ? GRID_HEIGHT - 38 : `${(100 - 10) / n - 2}%`;
-      const gridTop = needsScroll ? 10 + i * GRID_HEIGHT : `${5 + (i * (100 - 10)) / n}%`;
+      const gridHeight = needsScroll ? GRID_HEIGHT - 38 : `${(100 - 14) / n - 2}%`;
+      const gridTop = needsScroll ? 38 + i * GRID_HEIGHT : `${7 + (i * (100 - 14)) / n}%`;
       grids.push({ left: 80, right: 30, top: gridTop, height: gridHeight });
       const isLast = i === n - 1;
       xAxes.push({ type: "value", gridIndex: i, axisLabel: { show: isLast, color: "#9090a0" }, axisTick: { show: isLast }, axisLine: { lineStyle: { color: CHART_AXIS } }, ...(isLast ? { name: "Time (s)", nameLocation: "middle", nameGap: 30 } : {}) });
@@ -274,22 +287,16 @@
       backgroundColor: "#0d0d18", animation: false, title: { show: false },
       tooltip: manyChannels ? { show: false } : { trigger: "axis", axisPointer: { type: "cross" } },
       legend: { show: false }, grid: grids, xAxis: xAxes, yAxis: yAxes,
-      dataZoom: [{ type: "inside", xAxisIndex: xAxisIndices }], series,
-    }, true);
+      dataZoom: [{ type: "inside", xAxisIndex: xAxisIndices }],
+      toolbox: TOOLBOX_UNSTACKED,
+      series,
+    }, { replaceMerge: ["series", "xAxis", "yAxis", "grid"] });
     chart.resize();
   }
 
-  function blockLabel(block) {
-    if (block.data_kind === "raw_cw") return "Raw";
-    if (block.data_kind === "optical_density") return "OD";
-    if (block.data_kind === "processed_hemoglobin") return "Hb";
-    return `Block ${block.index}`;
-  }
-
-  async function fetchAndCacheData(blockIdx = selectedBlock) {
-    const payload = await invoke("get_timeseries_data", { blockIndex: blockIdx });
+  async function fetchAndCacheData() {
+    const payload = await invoke("get_timeseries_data");
     if (payload) {
-      selectedBlock = payload.block_index;
       allData = payload;
       syncEventTypes(payload.events || []);
       selectedIds = payload.channels.map((ch) => ch.id);
@@ -298,18 +305,15 @@
     }
   }
 
-  async function selectBlock(idx) {
-    if (idx === selectedBlock) return;
-    await fetchAndCacheData(idx);
-  }
-
   function onToggle(mode) { stacked = mode; updateChart(); }
 
   onMount(async () => {
     chart = echarts.init(container, "dark");
+    chart.on("restore", () => updateChart());
     await fetchAndCacheData();
     unlistenSnirf = await listen("snirf-loaded", async () => { await fetchAndCacheData(); });
     unlistenChannels = await listen("channels-selected", (event) => { selectedIds = event.payload.channel_ids; updateChart(); });
+    unlistenBlock = await listen("block-changed", async () => { await fetchAndCacheData(); });
     resizeObserver = new ResizeObserver(debouncedResize);
     resizeObserver.observe(wrapper);
   });
@@ -317,6 +321,7 @@
   onDestroy(() => {
     if (unlistenSnirf) unlistenSnirf();
     if (unlistenChannels) unlistenChannels();
+    if (unlistenBlock) unlistenBlock();
     if (resizeObserver) resizeObserver.disconnect();
     if (chart) chart.dispose();
   });
@@ -327,18 +332,6 @@
     <button class="toggle-btn" class:active={stacked} on:click={() => onToggle(true)}>Stacked</button>
     <button class="toggle-btn" class:active={!stacked} on:click={() => onToggle(false)}>Unstacked</button>
     <span class="channel-count">{selectedIds.length} channel{selectedIds.length !== 1 ? "s" : ""} plotted</span>
-
-    {#if allData?.available_blocks?.length > 1}
-      <div class="toolbar-sep"></div>
-      {#each allData.available_blocks as block}
-        <button
-          class="toggle-btn block-btn"
-          class:active={selectedBlock === block.index}
-          on:click={() => selectBlock(block.index)}
-          title="{block.channels} ch"
-        >{blockLabel(block)}</button>
-      {/each}
-    {/if}
 
     {#if eventTypes.length > 0}
       <div class="toolbar-sep"></div>
@@ -406,7 +399,6 @@
 
   .toggle-btn:hover { background: var(--bg-overlay); color: var(--text-secondary); }
   .toggle-btn.active { background: var(--bg-overlay); color: var(--text-primary); border-color: var(--border-strong); }
-  .block-btn.active { border-color: var(--accent-green); color: var(--accent-green); }
 
   .channel-count { margin-left: 12px; font-size: 11px; color: var(--text-muted); }
 

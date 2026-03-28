@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use hdf5::{File, Group};
 use nalgebra::{Vector2, Vector3};
-use ndarray::Array2;
+use ndarray16::Array2;
 
 use crate::{
     commands::SnirfSummary,
@@ -249,13 +249,13 @@ fn resolve_positions(
     match (pos2d, pos3d) {
         (Some(d2), Some(d3)) => Ok((d2, d3)),
         (None, Some(d3)) => {
-            let d2 = d3.slice(ndarray::s![.., 0..2]).to_owned();
+            let d2 = d3.slice(ndarray16::s![.., 0..2]).to_owned();
             Ok((d2, d3))
         }
         (Some(d2), None) => {
             let n = d2.nrows();
             let mut d3 = Array2::<f64>::zeros((n, 3));
-            d3.slice_mut(ndarray::s![.., 0..2]).assign(&d2);
+            d3.slice_mut(ndarray16::s![.., 0..2]).assign(&d2);
             Ok((d2, d3))
         }
         (None, None) => bail!("neither {label}Pos2D nor {label}Pos3D found"),
@@ -305,7 +305,7 @@ fn parse_probe(nirs: &Group) -> Result<Probe> {
     )
     .context("probe detector positions")?;
 
-    let row2 = |arr: &Array2<f64>, i: usize| Vector2::new(arr[[i, 0]], arr[[i, 1]]);
+    let row2 = |arr: &Array2<f64>, i: usize| Vector2::new(arr[[i, 0]], -arr[[i, 1]]);
     let row3 = |arr: &Array2<f64>, i: usize| Vector3::new(arr[[i, 0]], arr[[i, 1]], arr[[i, 2]]);
 
     let sources: Vec<Optode> = (0..s3d.nrows())
@@ -423,7 +423,10 @@ fn parse_data_blocks(nirs: &Group) -> Result<Vec<DataBlock>> {
             // lacks wavelengthIndex the block is structured differently (e.g.
             // concentration HbO/HbR) and cross-referencing would wrongly change
             // its DataKind classification.
-            let has_any = block.measurements.iter().any(|m| m.wavelength_index.is_some());
+            let has_any = block
+                .measurements
+                .iter()
+                .any(|m| m.wavelength_index.is_some());
             if !has_any {
                 continue;
             }
@@ -560,10 +563,10 @@ fn parse_event(stim: &Group) -> Result<Event> {
     let name_ds = stim.dataset("name").context("name dataset missing")?;
     let name = read_string(&name_ds).context("name: read failed")?;
 
-    let data: Array2<f64> = stim
+    let data = stim
         .dataset("data")
         .context("data dataset missing")?
-        .read_2d()
+        .read_2d::<f64>()
         .context("data: read failed")?;
 
     let mut markers: Vec<EventMarker> = data

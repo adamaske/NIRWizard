@@ -133,3 +133,15 @@ pub fn set_selected_channels(
 
     let _ = app.emit("channels-selected", ChannelsSelectedPayload { channel_ids });
 }
+
+#[tauri::command]
+pub fn set_active_block(
+    index: usize,
+    state: State<AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let mut selection = state.selection.write().map_err(|e| e.to_string())?;
+    selection.active_block = index;
+    drop(selection);
+    app.emit("block-changed", index).map_err(|e| e.to_string())
+}

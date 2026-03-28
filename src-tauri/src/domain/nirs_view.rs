@@ -134,7 +134,11 @@ impl<'a> NirsView<'a> {
 
     pub fn sampling_rate_at(&self, idx: usize) -> f64 {
         let t = self.time_at(idx);
-        if t.len() >= 2 { 1.0 / (t[1] - t[0]) } else { 0.0 }
+        if t.len() >= 2 {
+            1.0 / (t[1] - t[0])
+        } else {
+            0.0
+        }
     }
 
     pub fn duration_at(&self, idx: usize) -> f64 {

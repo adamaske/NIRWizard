@@ -28,41 +28,24 @@ pub struct EventPayload {
     pub markers: Vec<EventMarkerPayload>,
 }
 
-/// Lightweight descriptor for one data block, included in every payload so the
-/// frontend can build its block-selector without a separate round-trip.
-#[derive(Serialize, Debug)]
-pub struct BlockMeta {
-    pub index: usize,
-    pub data_kind: String,
-    pub channels: usize,
-}
-
 #[derive(Serialize, Debug)]
 pub struct TimeseriesPayload {
     pub time: Vec<f64>,
     pub data_kind: String,
     pub channels: Vec<ChannelPayload>,
     pub events: Vec<EventPayload>,
-    /// Which block this payload was built from.
     pub block_index: usize,
-    /// All available blocks in the file (for populating the block selector).
-    pub available_blocks: Vec<BlockMeta>,
 }
 
 #[tauri::command]
-pub fn get_timeseries_data(
-    block_index: Option<usize>,
-    state: tauri::State<AppState>,
-) -> Option<TimeseriesPayload> {
+pub fn get_timeseries_data(state: tauri::State<AppState>) -> Option<TimeseriesPayload> {
     let session = state.nirs.read().ok()?;
     let snirf = session.snirf.as_ref()?;
     let entry = snirf.nirs_entries.first()?;
     let view = NirsView::new(entry);
 
-    // Clamp to valid range
-    let block_idx = block_index
-        .unwrap_or(0)
-        .min(view.block_count().saturating_sub(1));
+    let requested = state.selection.read().ok()?.active_block;
+    let block_idx = requested.min(view.block_count().saturating_sub(1));
 
     let time = view.time_at(block_idx).to_vec();
     let data_kind = view.data_kind_at(block_idx);
@@ -166,26 +149,12 @@ pub fn get_timeseries_data(
         DataKind::Empty => "empty",
     };
 
-    let available_blocks: Vec<BlockMeta> = (0..view.block_count())
-        .map(|i| BlockMeta {
-            index: i,
-            data_kind: match view.data_kind_at(i) {
-                DataKind::RawCW => "raw_cw".to_string(),
-                DataKind::OpticalDensity => "optical_density".to_string(),
-                DataKind::ProcessedHemoglobin => "processed_hemoglobin".to_string(),
-                DataKind::Empty => "empty".to_string(),
-            },
-            channels: view.channels_at(i).len(),
-        })
-        .collect();
-
     Some(TimeseriesPayload {
         time,
         data_kind: kind_str.to_string(),
         channels,
         events,
         block_index: block_idx,
-        available_blocks,
     })
 }
 
