@@ -1,6 +1,6 @@
 use crate::domain::nirs_view::NirsView;
 use crate::domain::scene::Transform;
-use crate::domain::snirf::SNIRF;
+use crate::domain::snirf::Snirf;
 use nalgebra::Vector3;
 use serde::Serialize;
 use tauri::ipc::Channel;
@@ -51,7 +51,7 @@ pub struct OptodeLayout {
 }
 
 impl OptodeLayout {
-    pub fn from_snirf(snirf: &SNIRF) -> Self {
+    pub fn from_snirf(snirf: &Snirf) -> Self {
         let entry = &snirf.nirs_entries[0];
         let view = NirsView::new(entry);
 

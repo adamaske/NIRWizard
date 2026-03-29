@@ -1,12 +1,9 @@
+use crate::domain::snirf::*;
+use crate::domain::NWError;
 use anyhow::{bail, Context, Result};
 use hdf5::{File, Group};
 use nalgebra::{Vector2, Vector3};
 use ndarray16::Array2;
-
-use crate::{
-    commands::SnirfSummary,
-    domain::{SnirfError, *},
-};
 
 // =============================================================================
 // HDF5 tree inspector (debug builds only)
@@ -130,11 +127,11 @@ fn read_i32(ds: &hdf5::Dataset) -> Result<i32> {
 /// Returns a typed [`SnirfError`] so callers can distinguish a missing `/nirs`
 /// group from a lower-level parse failure.  Use `{:#}` formatting on the error
 /// to print the full context chain.
-pub fn parse_snirf(path: &str) -> Result<SNIRF, SnirfError> {
-    parse_snirf_inner(path).map_err(SnirfError::from)
+pub fn parse_snirf(path: &str) -> Result<Snirf, NWError> {
+    parse_snirf_inner(path).map_err(NWError::from)
 }
 
-fn parse_snirf_inner(path: &str) -> Result<SNIRF> {
+fn parse_snirf_inner(path: &str) -> Result<Snirf, NWError> {
     let file = File::open(path).with_context(|| format!("Failed to open '{path}'"))?;
 
     #[cfg(debug_assertions)]
@@ -174,10 +171,10 @@ fn parse_snirf_inner(path: &str) -> Result<SNIRF> {
 
     if nirs_entries.is_empty() {
         // Propagate as the dedicated NoNirsGroup variant via the From impl.
-        return Err(SnirfError::NoNirsGroup.into());
+        return Err(NWError::NoEntries.into());
     }
 
-    let snirf = SNIRF {
+    let snirf = Snirf {
         format_version,
         file_descriptor,
         nirs_entries,

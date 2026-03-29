@@ -1,5 +1,5 @@
 use crate::domain::nirs_view::NirsView;
-use crate::spectral::{compute_fft_spectrum, compute_welch_psd, WindowType};
+use crate::dsp::{compute_fft_spectrum, compute_welch_psd, WindowType};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 
@@ -20,7 +20,10 @@ pub fn get_spectrums(
     window: Option<String>,
     state: tauri::State<AppState>,
 ) -> Result<Vec<SpectrumDTO>, String> {
-    let use_psd = method.as_deref().unwrap_or("fft").eq_ignore_ascii_case("psd");
+    let use_psd = method
+        .as_deref()
+        .unwrap_or("fft")
+        .eq_ignore_ascii_case("psd");
     let window_type = match window.as_deref().unwrap_or("hann") {
         "hamming" => WindowType::Hamming,
         "blackman" => WindowType::Blackman,
@@ -42,7 +45,9 @@ pub fn get_spectrums(
         .first()
         .ok_or("No NIRS entries in file")?;
     let view = NirsView::new(entry);
-    let block_idx = selection.active_block.min(view.block_count().saturating_sub(1));
+    let block_idx = selection
+        .active_block
+        .min(view.block_count().saturating_sub(1));
     let sample_rate = view.sampling_rate_at(block_idx);
     let channels = view.channels_at(block_idx).to_vec();
     let channels = channels.as_slice();

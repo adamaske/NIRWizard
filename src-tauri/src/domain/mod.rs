@@ -1,5 +1,8 @@
 pub mod error;
-pub use error::SnirfError;
+pub use error::NWError;
+pub mod channel;
+pub mod summary;
+
 pub mod snirf;
 pub use snirf::*;
 pub mod mesh;
