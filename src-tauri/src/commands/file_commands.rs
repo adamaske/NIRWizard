@@ -1,6 +1,8 @@
 use crate::domain::error::{LogErr, NWError};
 
-use crate::domain::summary::SnirfSummary;
+use crate::domain::{
+    analysis_cache::AnalysisCache, channel_index::ChannelIndex, summary::SnirfSummary,
+};
 use crate::io::snirf_parser::parse_snirf;
 
 use crate::state::session::SessionState;
@@ -16,8 +18,10 @@ pub fn import_snirf_new(
     let summary = SnirfSummary::from_snirf(&snirf);
 
     // TODO : Cache channel index, time, frequency and time-frequency
+    let index = ChannelIndex::from_snirf(&snirf);
+    let cache = AnalysisCache::from_channel_index(&index);
 
-    session.load(snirf);
+    session.load(snirf, index, cache);
 
     app.emit("snirf-loaded", summary.clone());
     Ok(summary)

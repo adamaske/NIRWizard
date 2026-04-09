@@ -1,4 +1,4 @@
-use crate::spectral::window::{ApplyWindow, WindowType};
+use crate::analysis::window::{apply_window, WindowType};
 use realfft::RealFftPlanner;
 
 #[derive(serde::Serialize)]
@@ -13,7 +13,7 @@ pub fn compute_fft_spectrum(
     window: WindowType,
 ) -> SpectrumResult {
     let n = signal.len();
-    let windowed = ApplyWindow(signal, window);
+    let windowed = apply_window(signal, window);
 
     let mut planner = RealFftPlanner::<f64>::new();
     let fft = planner.plan_fft_forward(n);
@@ -57,7 +57,7 @@ pub fn compute_welch_psd(
     for i in 0..n_segments {
         let start = i * hop;
         let segment = &signal[start..start + segment_len];
-        let windowed = ApplyWindow(segment, window);
+        let windowed = apply_window(segment, window);
 
         let mut input = windowed;
         let mut output = fft.make_output_vec();

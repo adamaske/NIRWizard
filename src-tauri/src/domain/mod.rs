@@ -3,6 +3,9 @@ pub mod error;
 pub mod snirf;
 pub use snirf::*;
 
+pub mod analysis_cache;
+pub mod channel_index;
+
 pub mod summary;
 
 pub mod mesh;

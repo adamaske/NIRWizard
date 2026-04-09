@@ -7,7 +7,7 @@ pub enum WindowType {
     Blackman,
 }
 
-pub fn ApplyWindow(data: &[f64], window: WindowType) -> Vec<f64> {
+pub fn apply_window(data: &[f64], window: WindowType) -> Vec<f64> {
     let n = data.len() as f64;
     data.iter()
         .enumerate()

@@ -1,7 +1,7 @@
 pub mod probe;
 pub mod scene;
 pub mod spectral;
-mod summary;
+pub mod summary;
 pub mod timeseries;
 pub mod voxel;
 

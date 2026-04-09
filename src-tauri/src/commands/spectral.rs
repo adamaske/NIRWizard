@@ -1,5 +1,7 @@
+use crate::analysis::{
+    spectrum::compute_fft_spectrum, spectrum::compute_welch_psd, window::WindowType,
+};
 use crate::domain::nirs_view::NirsView;
-use crate::spectral::{compute_fft_spectrum, compute_welch_psd, WindowType};
 use crate::state::state_old::AppState;
 use serde::{Deserialize, Serialize};
 

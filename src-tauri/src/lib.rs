@@ -1,10 +1,12 @@
 mod commands;
 use commands::file_commands;
 use commands::info_commands;
+
+mod analysis;
+
 mod domain;
 mod io;
 mod setup;
-mod spectral;
 
 mod state;
 use state::selection::SelectionState;
