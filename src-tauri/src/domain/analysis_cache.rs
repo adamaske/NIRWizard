@@ -1,4 +1,5 @@
 use crate::domain::channel_index::ChannelIndex;
+
 pub struct AnalysisCache {}
 
 impl Default for AnalysisCache {
@@ -8,7 +9,10 @@ impl Default for AnalysisCache {
 }
 
 impl AnalysisCache {
-    pub fn from_channel_index(index: &ChannelIndex) -> AnalysisCache {
+    pub fn from_channel_index(_index: &ChannelIndex) -> AnalysisCache {
+        // Starts empty — results are lazily populated when commands request them.
+        // Pre-allocation based on index.block_count() / channel count can be added
+        // when sub-caches (frequency, spectrogram) are implemented.
         AnalysisCache {}
     }
 }

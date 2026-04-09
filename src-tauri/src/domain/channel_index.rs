@@ -34,6 +34,14 @@ impl Default for ChannelIndex {
 
 impl ChannelIndex {
     pub fn from_snirf(snirf: &Snirf) -> ChannelIndex {
+        // For each entry
+        //      For each block
+        //          Turn measurementlists into channel data
+        //
+        //
+        //  collect
+        //  return
+
         ChannelIndex {}
     }
 }
