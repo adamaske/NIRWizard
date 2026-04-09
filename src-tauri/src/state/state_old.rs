@@ -4,7 +4,7 @@ use std::sync::RwLock;
 
 use crate::domain::anatomy::SubjectAnatomy;
 use crate::domain::probe::OptodeLayout;
-use crate::domain::snirf::SNIRF;
+use crate::domain::snirf::Snirf;
 use crate::domain::voxel::VoxelVolume;
 
 pub struct AppState {
@@ -43,7 +43,7 @@ pub struct ProjectState {
 }
 pub struct NirsState {
     // SNIRF data, dervied views
-    pub snirf: Option<SNIRF>,
+    pub snirf: Option<Snirf>,
     pub optode_layout: Option<OptodeLayout>,
 }
 

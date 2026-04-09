@@ -1,19 +1,30 @@
+use log::error;
+use serde::Serialize;
 use thiserror::Error;
 
-/// Typed errors produced by the SNIRF parser.
-///
-/// `NoNirsGroup` is called out as its own variant because callers may want to
-/// distinguish "file opened fine but wasn't a SNIRF" from a lower-level
-/// parse failure. Everything else is captured by `Parse`, which carries the
-/// full `anyhow` error chain (including every `.context()` layer added inside
-/// the parser).
-#[derive(Debug, Error)]
-pub enum SnirfError {
-    /// The HDF5 file contained no `/nirs` or `/nirs1` group.
-    #[error("No /nirs group found in file")]
-    NoNirsGroup,
+pub trait LogErr<T> {
+    fn log_err(self, context: &str) -> Self;
+}
 
-    /// Any other parse failure. Displaying with `{:#}` prints the full chain.
-    #[error(transparent)]
-    Parse(#[from] anyhow::Error),
+impl<T, E: std::fmt::Display> LogErr<T> for Result<T, E> {
+    fn log_err(self, context: &str) -> Self {
+        if let Err(ref e) = self {
+            error!("{context}: {e}")
+        }
+        self
+    }
+}
+
+#[derive(Debug, Error, Serialize)]
+pub enum NWError {
+    #[error("{0}")]
+    GenericError(String),
+}
+
+pub fn test_error(return_error: bool) -> Result<String, NWError> {
+    if return_error {
+        Err(NWError::GenericError("test error".to_string()))
+    } else {
+        Ok("Success".to_string())
+    }
 }

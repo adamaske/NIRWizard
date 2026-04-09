@@ -5,13 +5,15 @@ mod summary;
 pub mod timeseries;
 pub mod voxel;
 
+pub mod info_commands;
+
 pub use summary::SnirfSummary;
 use tauri::Emitter;
 
 use crate::domain::probe::OptodeLayout;
 use crate::io::snirf_exporter;
 use crate::io::snirf_parser::parse_snirf;
-use crate::state::AppState;
+use crate::state::state_old::AppState;
 pub mod anatomy;
 
 // =============================================================================

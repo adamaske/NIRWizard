@@ -1,5 +1,5 @@
 use crate::domain::voxel::{VoxelSlicePayload, VoxelVolumeInfo};
-use crate::state::AppState;
+use crate::state::state_old::AppState;
 
 #[tauri::command]
 pub fn list_voxel_volumes(state: tauri::State<AppState>) -> Vec<String> {

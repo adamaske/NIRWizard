@@ -1,5 +1,5 @@
 use crate::domain::nirs_view::{DataKind, NirsView};
-use crate::state::AppState;
+use crate::state::state_old::AppState;
 use serde::Serialize;
 
 #[derive(Serialize, Debug)]
@@ -94,8 +94,14 @@ pub fn get_timeseries_data(state: tauri::State<AppState>) -> Option<TimeseriesPa
                     .and_then(|m| m.wavelength_index)
                     .and_then(|i| view.wavelength_nm(i))
                     .unwrap_or(0.0);
-                let d0 = view.channel_data_at(block_idx, ch, 0).unwrap_or(&[]).to_vec();
-                let d1 = view.channel_data_at(block_idx, ch, 1).unwrap_or(&[]).to_vec();
+                let d0 = view
+                    .channel_data_at(block_idx, ch, 0)
+                    .unwrap_or(&[])
+                    .to_vec();
+                let d1 = view
+                    .channel_data_at(block_idx, ch, 1)
+                    .unwrap_or(&[])
+                    .to_vec();
 
                 // Longer wavelength = HbO-sensitive (series_a / red)
                 let (a_data, a_wl, b_data, b_wl) = if wl0 >= wl1 {
@@ -104,7 +110,11 @@ pub fn get_timeseries_data(state: tauri::State<AppState>) -> Option<TimeseriesPa
                     (d1, wl1, d0, wl0)
                 };
 
-                let prefix = if data_kind == DataKind::OpticalDensity { "dOD " } else { "" };
+                let prefix = if data_kind == DataKind::OpticalDensity {
+                    "dOD "
+                } else {
+                    ""
+                };
                 ChannelPayload {
                     id: ch.id,
                     name: ch.name.clone(),

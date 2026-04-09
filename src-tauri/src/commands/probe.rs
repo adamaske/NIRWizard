@@ -2,7 +2,7 @@ use serde::Serialize;
 use tauri::{Emitter, State};
 
 use crate::domain::nirs_view::NirsView;
-use crate::state::AppState;
+use crate::state::state_old::AppState;
 
 // =============================================================================
 // Response types

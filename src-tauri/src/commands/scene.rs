@@ -5,7 +5,7 @@ use crate::domain::anatomy::SubjectAnatomy;
 use crate::domain::mesh::MeshGeometry;
 use crate::domain::probe::OptodeLayout;
 use crate::domain::scene::{SceneObject, Transform};
-use crate::state::AppState;
+use crate::state::state_old::AppState;
 
 fn transform_from_arrays(position: [f64; 3], rotation: [f64; 3], scale: [f64; 3]) -> Transform {
     Transform {

@@ -1,7 +1,10 @@
 pub mod error;
-pub use error::SnirfError;
+
 pub mod snirf;
 pub use snirf::*;
+
+pub mod summary;
+
 pub mod mesh;
 pub mod nirs_view; // ← new
 pub use mesh::{Mesh, MeshGeometry, MeshTopology, Vertex};

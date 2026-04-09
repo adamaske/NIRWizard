@@ -2,7 +2,7 @@ use serde::Serialize;
 use tauri::Emitter;
 
 use crate::io::anatomy_importer::{load_head_labels_volume, load_subject_anatomy};
-use crate::state::AppState;
+use crate::state::state_old::AppState;
 
 #[derive(Serialize, Clone)]
 pub struct AnatomyLoadedPayload {

@@ -1,7 +1,7 @@
 use nalgebra::{Vector2, Vector3};
 use std::fmt;
 
-pub struct SNIRF {
+pub struct Snirf {
     pub format_version: String,
     pub file_descriptor: FileDescriptor,
     pub nirs_entries: Vec<NirsEntry>,
@@ -141,7 +141,7 @@ pub struct AuxiliaryData {
     pub time_offset: Option<f64>,
 }
 
-impl fmt::Display for SNIRF {
+impl fmt::Display for Snirf {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(
             f,

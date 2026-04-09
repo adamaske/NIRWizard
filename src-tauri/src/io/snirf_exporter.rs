@@ -59,7 +59,7 @@ fn write_f64_2d(group: &hdf5::Group, name: &str, array: &Array2<f64>) -> Result<
 // Public exporter entry
 // =============================================================================
 
-pub fn export_snirf(snirf: &SNIRF, path: &str) -> Result<(), String> {
+pub fn export_snirf(snirf: &Snirf, path: &str) -> Result<(), String> {
     // TODO : Rewrite exporter based on sNIRF specification
     //
     // For each nirs entry
