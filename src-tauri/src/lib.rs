@@ -1,16 +1,15 @@
 mod commands;
+use commands::file_commands;
 use commands::info_commands;
-
 mod domain;
 mod io;
 mod setup;
 mod spectral;
+
 mod state;
-
-use crate::state::state_old::AppState;
-
 use state::selection::SelectionState;
 use state::session::SessionState;
+use state::state_old::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -33,11 +32,15 @@ pub fn run() {
         .manage(AppState::default())
         .setup(setup::setup_app) // Automatically passes AppState ?
         .invoke_handler(tauri::generate_handler![
+            // INFO
+            info_commands::get_snirf_summary_new,
+            // FILE
+            file_commands::import_snirf_new,
+            file_commands::export_snirf_new,
+            //
             commands::import_snirf,
             commands::export_snirf,
             commands::get_snirf_summary,
-            // INFO
-            info_commands::get_snirf_summary_new,
             //
             commands::timeseries::get_timeseries_data,
             commands::timeseries::set_cursor_timepoint,

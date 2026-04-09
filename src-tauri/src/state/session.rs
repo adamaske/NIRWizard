@@ -18,3 +18,10 @@ impl Default for SessionState {
         }
     }
 }
+
+impl SessionState {
+    pub fn load(&self, snirf: Snirf) {
+        let mut session = self.session.write().unwrap();
+        session.snirf = Some(snirf);
+    }
+}

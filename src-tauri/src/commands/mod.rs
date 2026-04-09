@@ -5,8 +5,8 @@ mod summary;
 pub mod timeseries;
 pub mod voxel;
 
+pub mod file_commands;
 pub mod info_commands;
-
 pub use summary::SnirfSummary;
 use tauri::Emitter;
 
